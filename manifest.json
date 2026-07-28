@@ -6,7 +6,7 @@
     { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" }
   ],
   "display": "standalone",
-  "start_url": ".",
+  "start_url": "round-log.html",
   "background_color": "#F2EEE2",
   "theme_color": "#1F3D2E"
 }
