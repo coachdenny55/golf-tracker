@@ -616,13 +616,15 @@
 <script>
 const CLUBS = ["Driver","Fairway Wood","Hybrid","Long Iron (3-5)","Mid Iron (6-7)","Short Iron (8-9)","Wedge"];
 const APPROACH_RANGES = ["<50","50-100","100-150","150-200","200+"];
-const APP_VERSION = '1.2';
+const APP_VERSION = '1.8';
 
 function blankHole(par){
   return {
     par: par||4, score: par||4, fir:null, approach:null, approachYards:null,
     club:null, gir:null, ud:null, putts:2, puttDist:null,
-    blowup:null, recClub:null, recSwing:null, followedRec:null
+    blowup:null, recClub:null, recSwing:null, followedRec:null,
+    girMissDist:null, girMissDir:null, girTap:null, girMissSeverity:null, approachLie:null,
+    firMissDir:null, firTap:null, firMissSeverity:null, teeClub:null
   };
 }
 function newRound(){
@@ -631,6 +633,127 @@ function newRound(){
 function blankCourseHoles(){
   return Array.from({length:18},()=>({par:4, yardage:null}));
 }
+function girMissAbbrev(h){
+  const dist = {short:'S', long:'Lg'}[h.girMissDist||''] || '';
+  const dir = {left:'L', right:'R'}[h.girMissDir||''] || '';
+  return (dist+dir) || '✕';
+}
+function girMissLabel(h){
+  const dist = {short:'Short', pin:'Pin high', long:'Long'}[h.girMissDist||''];
+  const dir = {left:'Left', center:'Center', right:'Right'}[h.girMissDir||''];
+  const parts = [dist, dir].filter(Boolean);
+  return parts.length ? 'Missed ' + parts.join(', ').toLowerCase() : 'Missed green';
+}
+
+// ---------- Tap-to-mark diagrams ----------
+// No more Hit/Miss buttons — you tap where the ball actually finished, on a
+// generic (not to-scale) diagram, and the app reads hit/miss and the miss
+// location straight off the tap position. Both diagrams share the same
+// 200x200 SVG unit square and yard-per-diagram scale; only the shape drawn
+// (circle green vs. fairway corridor) and the classification differ.
+const TARGET_DIAGRAM_YARDS = 45;   // green diagram: ±45y from the pin, in every direction
+const GREEN_RADIUS_YARDS = 15;     // tap inside this radius of the pin = green in regulation
+const GREEN_NEAR_MISS_YARDS = 25;  // between the green edge and here = a "near" miss; beyond = "bad"
+const FAIRWAY_DIAGRAM_YARDS = 45;  // fairway diagram: ±45y of lateral spread, tee to the near edge of view
+const FAIRWAY_HALF_WIDTH_YARDS = 17; // tap within this many yards of the center line = fairway hit
+const FAIRWAY_NEAR_MISS_YARDS = 27;  // between the fairway edge and here = "near" (first cut); beyond = "bad"
+const MISS_DEADZONE_YARDS = 3;
+
+function svgTapToYards(svgId, e, diagramYards){
+  const svg = document.getElementById(svgId);
+  const rect = svg.getBoundingClientRect();
+  if(rect.width===0 || rect.height===0) return null;
+  const px = ((e.clientX-rect.left)/rect.width)*200;
+  const py = ((e.clientY-rect.top)/rect.height)*200;
+  const scalePx = 200/(diagramYards*2);
+  return { lateral: (px-100)/scalePx, long: (100-py)/scalePx };
+}
+function attachDiagramTapHandler(svgId, diagramYards, onTap){
+  const svg = document.getElementById(svgId);
+  if(!svg) return;
+  svg.onclick = e => {
+    const tap = svgTapToYards(svgId, e, diagramYards);
+    if(tap) onTap(tap);
+  };
+}
+
+function classifyGreenTap(tap){
+  const {long, lateral} = tap;
+  const radius = Math.sqrt(long*long + lateral*lateral);
+  if(radius <= GREEN_RADIUS_YARDS) return {gir:'hit', dir:null, dist:null, severity:null};
+  const dir = lateral > MISS_DEADZONE_YARDS ? 'right' : lateral < -MISS_DEADZONE_YARDS ? 'left' : 'center';
+  const dist = long > MISS_DEADZONE_YARDS ? 'long' : long < -MISS_DEADZONE_YARDS ? 'short' : 'pin';
+  const severity = radius <= GREEN_NEAR_MISS_YARDS ? 'near' : 'bad';
+  return {gir:'miss', dir, dist, severity};
+}
+function classifyFairwayTap(tap){
+  const abs = Math.abs(tap.lateral);
+  if(abs <= FAIRWAY_HALF_WIDTH_YARDS) return {fir:'hit', dir:null, severity:null};
+  const dir = tap.lateral > 0 ? 'right' : 'left';
+  const severity = abs <= FAIRWAY_NEAR_MISS_YARDS ? 'near' : 'bad';
+  return {fir:'miss', dir, severity};
+}
+
+// opts: {current:{long,lateral}|null, dots:[{long,lateral,severity}]}
+function renderGreenDiagram(id, opts){
+  opts = opts || {};
+  const scalePx = 200/(TARGET_DIAGRAM_YARDS*2);
+  const toPx = t => ({x: 100+t.lateral*scalePx, y: 100-t.long*scalePx});
+  const greenR = (GREEN_RADIUS_YARDS*scalePx).toFixed(1);
+  const nearR = (GREEN_NEAR_MISS_YARDS*scalePx).toFixed(1);
+  const dotsSvg = (opts.dots||[]).map(d=>{
+    const p = toPx(d);
+    const color = d.severity==='bad' ? 'var(--red)' : d.severity==='near' ? 'var(--gold)' : 'var(--green-deep)';
+    return `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="4" fill="${color}" fill-opacity="0.8" stroke="var(--paper-raised)" stroke-width="0.75"/>`;
+  }).join('');
+  const currentSvg = opts.current ? (()=>{
+    const p = toPx(opts.current);
+    return `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="6" fill="var(--green-deep)" stroke="var(--paper-raised)" stroke-width="1.5"/>`;
+  })() : '';
+  return `
+    <svg id="${id}" viewBox="0 0 200 200" preserveAspectRatio="xMidYMid meet"
+      style="width:100%;max-width:320px;display:block;margin:6px auto;touch-action:manipulation;cursor:crosshair;background:var(--paper-raised);border:1px solid var(--line);border-radius:8px;">
+      <circle cx="100" cy="100" r="${nearR}" fill="none" stroke="var(--line-strong)" stroke-dasharray="4,3"/>
+      <circle cx="100" cy="100" r="${greenR}" fill="var(--green-mid)" fill-opacity="0.32" stroke="var(--green-deep)" stroke-width="1"/>
+      <line x1="100" y1="4" x2="100" y2="196" stroke="var(--line)" stroke-width="0.5"/>
+      <line x1="4" y1="100" x2="196" y2="100" stroke="var(--line)" stroke-width="0.5"/>
+      <g>
+        <line x1="100" y1="100" x2="100" y2="88" stroke="var(--green-deep)" stroke-width="2"/>
+        <path d="M100,88 L110,92 L100,96 Z" fill="var(--gold)"/>
+      </g>
+      ${dotsSvg}
+      ${currentSvg}
+    </svg>
+  `;
+}
+// opts: {current:{long,lateral}|null, dots:[{long,lateral,severity}]}
+function renderFairwayDiagram(id, opts){
+  opts = opts || {};
+  const scalePx = 200/(FAIRWAY_DIAGRAM_YARDS*2);
+  const toPx = t => ({x: 100+t.lateral*scalePx, y: 100-t.long*scalePx});
+  const halfW = (FAIRWAY_HALF_WIDTH_YARDS*scalePx).toFixed(1);
+  const nearHalfW = (FAIRWAY_NEAR_MISS_YARDS*scalePx).toFixed(1);
+  const dotsSvg = (opts.dots||[]).map(d=>{
+    const p = toPx(d);
+    const color = d.severity==='bad' ? 'var(--red)' : d.severity==='near' ? 'var(--gold)' : 'var(--green-deep)';
+    return `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="4" fill="${color}" fill-opacity="0.8" stroke="var(--paper-raised)" stroke-width="0.75"/>`;
+  }).join('');
+  const currentSvg = opts.current ? (()=>{
+    const p = toPx(opts.current);
+    return `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="6" fill="var(--green-deep)" stroke="var(--paper-raised)" stroke-width="1.5"/>`;
+  })() : '';
+  return `
+    <svg id="${id}" viewBox="0 0 200 200" preserveAspectRatio="xMidYMid meet"
+      style="width:100%;max-width:320px;display:block;margin:6px auto;touch-action:manipulation;cursor:crosshair;background:var(--paper-raised);border:1px solid var(--line);border-radius:8px;">
+      <rect x="${100-nearHalfW}" y="4" width="${nearHalfW*2}" height="192" fill="none" stroke="var(--line-strong)" stroke-dasharray="4,3"/>
+      <rect x="${100-halfW}" y="4" width="${halfW*2}" height="192" fill="var(--green-mid)" fill-opacity="0.32" stroke="var(--green-deep)" stroke-width="1"/>
+      <line x1="100" y1="4" x2="100" y2="196" stroke="var(--line)" stroke-width="0.5" stroke-dasharray="2,3"/>
+      <g><path d="M96,190 L104,190 L100,180 Z" fill="var(--gold)"/></g>
+      ${dotsSvg}
+      ${currentSvg}
+    </svg>
+  `;
+}
 function approachBucketFromYards(y){
   if(y==null || isNaN(y)) return null;
   if(y<50) return "<50";
@@ -638,6 +761,39 @@ function approachBucketFromYards(y){
   if(y<150) return "100-150";
   if(y<200) return "150-200";
   return "200+";
+}
+// Reads the lie for the approach shot straight off the tee shot tap instead of
+// making you tag it separately. On a par 3 the tee shot IS the approach, so
+// it's always 'tee'. Otherwise: found the fairway = 'fairway', a near miss
+// (first-cut band just outside the fairway edge) = 'lightrough', a bad miss =
+// 'heavyrough' as the best generic guess — the tap can't tell a fairway bunker
+// or trees from deep rough, so this is a default, not a fact; the Lie for the
+// Approach buttons stay tappable to correct it when that matters.
+function inferApproachLie(h){
+  if(h.par===3) return 'tee';
+  if(h.fir==='hit') return 'fairway';
+  if(h.fir==='miss') return h.firMissSeverity==='bad' ? 'heavyrough' : 'lightrough';
+  return null;
+}
+// On a hit green, the approach tap's distance from the pin already tells us
+// roughly how far the first putt is — no reason to make you tap it again.
+// Only applies to hits: a missed green gets chipped/pitched first, and we
+// don't have a tap for that recovery shot, so it stays manual there.
+function inferFirstPuttDist(h){
+  if(h.gir!=='hit' || !h.girTap) return null;
+  const feet = Math.sqrt(h.girTap.long*h.girTap.long + h.girTap.lateral*h.girTap.lateral) * 3;
+  if(feet <= 10) return 'in10';
+  if(feet <= 25) return '10to25';
+  return '25plus';
+}
+// Most golfers reach for the same tee club most holes — default to whatever
+// was used most recently in this round instead of making you pick it fresh
+// every time. Still just a starting point: tap a different club to override.
+function defaultTeeClubForHole(idx){
+  for(let i=idx-1; i>=0; i--){
+    if(round.holes[i] && round.holes[i].teeClub) return round.holes[i].teeClub;
+  }
+  return null;
 }
 
 // ---------- Bag & Caddie model ----------
@@ -768,7 +924,12 @@ function clubDirectionBias(club){
   const right = misses.filter(s=>s.direction==='right').length;
   const dom = left>right ? 'left' : right>left ? 'right' : null;
   const domPct = dom ? Math.round(Math.max(left,right)/misses.length*100) : 0;
-  return {n:shots.length, missN:misses.length, dominant: domPct>=60 ? dom : null, domPct};
+  const shortCount = shots.filter(s=>typeof s.target==='number' && (s.actual-s.target) < -3).length;
+  const longCount = shots.filter(s=>typeof s.target==='number' && (s.actual-s.target) > 3).length;
+  const distDom = shortCount>longCount ? 'short' : longCount>shortCount ? 'long' : null;
+  const distPct = distDom ? Math.round(Math.max(shortCount,longCount)/shots.length*100) : 0;
+  return {n:shots.length, missN:misses.length, dominant: domPct>=60 ? dom : null, domPct,
+    distDominant: distPct>=50 ? distDom : null, distPct};
 }
 // Compound pattern: a specific lie tends to produce a specific miss direction/short-long result
 function lieShotPattern(lieId){
@@ -784,6 +945,59 @@ function lieShotPattern(lieId){
   const shortCount = shots.filter(s=>typeof s.target==='number' && (s.actual-s.target) < -3).length;
   const shortPct = Math.round(shortCount/shots.length*100);
   return {n:shots.length, dominant: domPct>=60?dom:null, domPct, shortPct};
+}
+// On-course approach miss pattern: uses the Miss Distance/Miss Direction logged
+// against Green In Regulation on actual rounds, grouped by club into the green.
+function approachMissPattern(clubName, fullRounds){
+  let misses = [];
+  (fullRounds||[]).forEach(r=>(r.holes||[]).forEach(h=>{
+    if(h.club===clubName && h.gir==='miss' && (h.girMissDist || h.girMissDir)) misses.push(h);
+  }));
+  if(misses.length < 5) return null;
+  const left = misses.filter(h=>h.girMissDir==='left').length;
+  const right = misses.filter(h=>h.girMissDir==='right').length;
+  const dirDom = left>right ? 'left' : right>left ? 'right' : null;
+  const dirPct = dirDom ? Math.round(Math.max(left,right)/misses.length*100) : 0;
+  const short = misses.filter(h=>h.girMissDist==='short').length;
+  const long = misses.filter(h=>h.girMissDist==='long').length;
+  const distDom = short>long ? 'short' : long>short ? 'long' : null;
+  const distPct = distDom ? Math.round(Math.max(short,long)/misses.length*100) : 0;
+  return {n:misses.length, dirDom: dirPct>=50?dirDom:null, dirPct, distDom: distPct>=50?distDom:null, distPct};
+}
+// On-course approach miss pattern grouped by the lie the approach was hit from,
+// instead of by club — ties the practice-log lie tendency to real rounds.
+function onCourseLiePattern(lieId, fullRounds){
+  let misses = [];
+  (fullRounds||[]).forEach(r=>(r.holes||[]).forEach(h=>{
+    if(h.approachLie===lieId && h.gir==='miss' && (h.girMissDist || h.girMissDir)) misses.push(h);
+  }));
+  if(misses.length < 5) return null;
+  const left = misses.filter(h=>h.girMissDir==='left').length;
+  const right = misses.filter(h=>h.girMissDir==='right').length;
+  const dirDom = left>right ? 'left' : right>left ? 'right' : null;
+  const dirPct = dirDom ? Math.round(Math.max(left,right)/misses.length*100) : 0;
+  const short = misses.filter(h=>h.girMissDist==='short').length;
+  const long = misses.filter(h=>h.girMissDist==='long').length;
+  const distDom = short>long ? 'short' : long>short ? 'long' : null;
+  const distPct = distDom ? Math.round(Math.max(short,long)/misses.length*100) : 0;
+  return {n:misses.length, dirDom: dirPct>=50?dirDom:null, dirPct, distDom: distPct>=50?distDom:null, distPct};
+}
+// On-course tee shot miss pattern, grouped by club off the tee. Fairway misses
+// are lateral-only (no long/short axis), so this tracks direction plus how
+// often the miss was a "bad" one (well off the fairway) vs. just the first cut.
+function teeMissPattern(clubName, fullRounds){
+  let misses = [];
+  (fullRounds||[]).forEach(r=>(r.holes||[]).forEach(h=>{
+    if(h.teeClub===clubName && h.fir==='miss' && h.firMissDir) misses.push(h);
+  }));
+  if(misses.length < 5) return null;
+  const left = misses.filter(h=>h.firMissDir==='left').length;
+  const right = misses.filter(h=>h.firMissDir==='right').length;
+  const dom = left>right ? 'left' : right>left ? 'right' : null;
+  const domPct = dom ? Math.round(Math.max(left,right)/misses.length*100) : 0;
+  const badCount = misses.filter(h=>h.firMissSeverity==='bad').length;
+  const badPct = Math.round(badCount/misses.length*100);
+  return {n:misses.length, dom: domPct>=60?dom:null, domPct, badPct};
 }
 function allShotsCount(){
   return bag.reduce((n,c)=>n+((c.shots||[]).length),0);
@@ -906,6 +1120,18 @@ function domainsLinked(d1, d2){
     if(d2==='shortgame' || d2.startsWith('girBucket:')) return true;
     return false;
   }
+  if(d1.startsWith('girMissPattern:')){
+    if(d2==='shortgame' || d2.startsWith('girBucket:')) return true;
+    return false;
+  }
+  if(d1.startsWith('girByLie:') || d1.startsWith('lieDirectionCourse:')){
+    if(d2==='shortgame' || d2.startsWith('girBucket:') || d2.startsWith('girMissPattern:') || d1.split(':')[1]===d2.split(':')[1]) return true;
+    return false;
+  }
+  if(d1.startsWith('teeClubFIR:') || d1.startsWith('teeMissPattern:')){
+    if(d2==='blowup:teeshot' || d1.split(':').slice(1).join(':')===d2.split(':').slice(1).join(':')) return true;
+    return false;
+  }
   return false;
 }
 
@@ -913,7 +1139,8 @@ function computeFocusCandidates(fullRounds){
   const coldStart = history.length < 8;
   let candidates = [];
 
-  let girByBucket = {}, girHitTotal=0, girAttemptsTotal=0;
+  let girByBucket = {}, girByLie = {}, girHitTotal=0, girAttemptsTotal=0;
+  let teeClubStats = {};
   let scrambleHit=0, scrambleAttempts=0;
   let puttsIn10={made:0,total:0}, putts25={threePlus:0,total:0};
   let blowupCounts = {}, blowupTotal = 0;
@@ -929,10 +1156,20 @@ function computeFocusCandidates(fullRounds){
           girByBucket[h.approach].total++;
           if(h.gir==='hit') girByBucket[h.approach].hit++;
         }
+        if(h.approachLie){
+          girByLie[h.approachLie] = girByLie[h.approachLie]||{hit:0,total:0};
+          girByLie[h.approachLie].total++;
+          if(h.gir==='hit') girByLie[h.approachLie].hit++;
+        }
         if(h.gir==='miss' && h.ud!==null){
           scrambleAttempts++;
           if(h.ud==='yes') scrambleHit++;
         }
+      }
+      if(h.par!==3 && h.teeClub && h.fir!==null){
+        teeClubStats[h.teeClub] = teeClubStats[h.teeClub]||{hit:0,total:0};
+        teeClubStats[h.teeClub].total++;
+        if(h.fir==='hit') teeClubStats[h.teeClub].hit++;
       }
       if(h.puttDist==='in10'){ puttsIn10.total++; if(h.putts===1) puttsIn10.made++; }
       if(h.puttDist==='25plus'){ putts25.total++; if(h.putts>=3) putts25.threePlus++; }
@@ -960,6 +1197,46 @@ function computeFocusCandidates(fullRounds){
       });
     }
   });
+
+  Object.entries(girByLie).forEach(([lieId,v])=>{
+    if(v.total<5) return;
+    const lie = LIES.find(l=>l.id===lieId);
+    if(!lie) return;
+    const pct = v.hit/v.total*100;
+    const baseline = coldStart ? BENCH.gir : (girOverallPct!==null?girOverallPct:BENCH.gir);
+    const deficit = baseline - pct;
+    if(deficit>=12){
+      candidates.push({
+        key:`girByLie:${lieId}`, tier:'symptom', domain:`girByLie:${lieId}`,
+        severity: deficit*Math.sqrt(v.total), n:v.total,
+        line:`Approach shots from ${lie.label.toLowerCase()} are a weak spot — ${Math.round(pct)}% GIR vs ${coldStart?'the':'your own'} ${Math.round(baseline)}% ${coldStart?'benchmark':'average'}.`,
+        detail:`Over your last ${fullRounds.length} rounds, you've hit ${v.hit} of ${v.total} greens from ${lie.label.toLowerCase()} (${Math.round(pct)}%) — below ${coldStart?'the 44% benchmark for breaking 80':'your own overall GIR rate of '+Math.round(baseline)+'%'}.`,
+        drillTitle:`Approach drill — ${lie.label.toLowerCase()}`,
+        drillBody:`Drop 10 balls in ${lie.label.toLowerCase()} and hit approach shots at a real target, tracking Miss Distance and Miss Direction the same way you do on the course.`,
+        reassessLabel:`GIR% from ${lie.label.toLowerCase()}`
+      });
+    }
+  });
+
+  const teeClubEntries = Object.entries(teeClubStats)
+    .filter(([,v])=>v.total>=5)
+    .map(([name,v])=>({name, pct: v.hit/v.total*100, hit:v.hit, total:v.total}));
+  if(teeClubEntries.length>=2){
+    teeClubEntries.sort((a,b)=>b.pct-a.pct);
+    const best = teeClubEntries[0], worst = teeClubEntries[teeClubEntries.length-1];
+    const gap = best.pct - worst.pct;
+    if(gap>=20){
+      candidates.push({
+        key:`teeClubFIR:${worst.name}`, tier:'symptom', domain:`teeClubFIR:${worst.name}`,
+        severity: gap*Math.sqrt(worst.total)*0.5, n:worst.total,
+        line:`Off the tee, ${worst.name} finds the fairway ${Math.round(worst.pct)}% of the time vs ${Math.round(best.pct)}% with ${best.name} — worth laying up more.`,
+        detail:`Over your last ${fullRounds.length} rounds: ${worst.name} hit ${worst.hit} of ${worst.total} fairways (${Math.round(worst.pct)}%), while ${best.name} hit ${best.hit} of ${best.total} (${Math.round(best.pct)}%). That's a real enough gap to change strategy on tight driving holes.`,
+        drillTitle:`${worst.name} vs ${best.name} — course strategy`,
+        drillBody:`On your next tight driving hole, hit ${best.name} instead of ${worst.name} and track the fairway result. If the gap holds, make it the default.`,
+        reassessLabel:`${worst.name} FIR%`
+      });
+    }
+  }
 
   if(scrambleAttempts>=5){
     const pct = scrambleHit/scrambleAttempts*100;
@@ -1061,14 +1338,32 @@ function computeFocusCandidates(fullRounds){
     }
     const d = clubDirectionBias(c);
     if(d && d.dominant){
+      const distNote = d.distDominant ? ` and tends to finish ${d.distDominant} as well` : '';
       candidates.push({
         key:`clubDirection:${c.id}`, tier:'root', domain:`clubDirection:${c.id}`,
         severity: d.domPct*Math.sqrt(d.missN)*0.5, n:d.missN,
-        line:`Your ${c.name} misses ${d.dominant} ${d.domPct}% of the time it misses.`,
-        detail:`Across ${d.n} logged ${c.name} shots, ${d.missN} were off-center, and ${d.domPct}% of those missed ${d.dominant}. Worth favoring the opposite side of the target until it's fixed.`,
+        line:`Your ${c.name} misses ${d.dominant} ${d.domPct}% of the time it misses${d.distDominant?`, often ${d.distDominant} and ${d.dominant}`:''}.`,
+        detail:`Across ${d.n} logged ${c.name} shots, ${d.missN} were off-center, and ${d.domPct}% of those missed ${d.dominant}${distNote}. Worth favoring the opposite side of the target until it's fixed.`,
         drillTitle:`${c.name} start-line drill`,
         drillBody:`Set two alignment sticks as a gate just outside the ball on your target line. Hit 10 balls with your ${c.name} — the ball has to start through the gate. Track how many still miss ${d.dominant}.`,
         reassessLabel:`${c.name} miss direction`
+      });
+    }
+  });
+
+  CLUBS.forEach(clubName=>{
+    const m = approachMissPattern(clubName, fullRounds);
+    if(m && (m.dirDom || m.distDom)){
+      const both = m.dirDom && m.distDom;
+      const whereText = both ? `${m.distDom} and ${m.dirDom}` : (m.distDom || m.dirDom);
+      candidates.push({
+        key:`girMissPattern:${clubName}`, tier:'root', domain:`girMissPattern:${clubName}`,
+        severity: Math.max(m.dirPct,m.distPct)*Math.sqrt(m.n)*0.5, n:m.n,
+        line:`On the course, your ${clubName} into the green tends to miss ${whereText} of the target.`,
+        detail:`Across ${m.n} logged missed greens with your ${clubName} in play, ${both ? `misses skewed ${m.distDom} ${m.distPct}% of the time and ${m.dirDom} ${m.dirPct}% of the time` : (m.distDom ? `${m.distPct}% finished ${m.distDom}` : `${m.dirPct}% missed ${m.dirDom}`)}. Worth knowing which side of the pin to bail out to before you commit to the shot.`,
+        drillTitle:`${clubName} approach drill`,
+        drillBody:`Hit 10 ${clubName} approach shots at a real target. Log Miss Distance and Miss Direction the same way you do on the course, and see if the pattern holds.`,
+        reassessLabel:`${clubName} approach miss pattern`
       });
     }
   });
@@ -1085,6 +1380,36 @@ function computeFocusCandidates(fullRounds){
         drillTitle:`${lie.label} lie drill`,
         drillBody:`Drop 9 balls in ${lie.label.toLowerCase()} — one swing each, log carry distance and direction. Compare the pattern to your fairway numbers with the same club.`,
         reassessLabel:`${lie.label} miss tendency`
+      });
+    }
+    const oc = onCourseLiePattern(lie.id, fullRounds);
+    if(oc && (oc.dirDom || oc.distDom)){
+      const both = oc.dirDom && oc.distDom;
+      const whereText = both ? `${oc.distDom} and ${oc.dirDom}` : (oc.distDom || oc.dirDom);
+      candidates.push({
+        key:`lieDirectionCourse:${lie.id}`, tier:'root', domain:`lieDirectionCourse:${lie.id}`,
+        severity: Math.max(oc.dirPct,oc.distPct)*Math.sqrt(oc.n)*0.5, n:oc.n,
+        line:`On the course, approach shots from ${lie.label.toLowerCase()} tend to miss ${whereText} of the target.`,
+        detail:`Across ${oc.n} logged missed greens hit from ${lie.label.toLowerCase()}, ${both ? `misses skewed ${oc.distDom} ${oc.distPct}% of the time and ${oc.dirDom} ${oc.dirPct}% of the time` : (oc.distDom ? `${oc.distPct}% finished ${oc.distDom}` : `${oc.dirPct}% missed ${oc.dirDom}`)}. Worth checking whether this matches your range sessions from the same lie.`,
+        drillTitle:`${lie.label} approach drill`,
+        drillBody:`Drop 10 balls in ${lie.label.toLowerCase()} and hit approach shots at a real target, tracking Miss Distance and Miss Direction the same way you do on the course.`,
+        reassessLabel:`${lie.label} approach miss pattern (course)`
+      });
+    }
+  });
+
+  CLUBS.forEach(clubName=>{
+    const tm = teeMissPattern(clubName, fullRounds);
+    if(tm && tm.dom){
+      const badNote = tm.badPct>=50 ? `, and ${tm.badPct}% of those are well off the fairway — real trouble, not just first cut` : '';
+      candidates.push({
+        key:`teeMissPattern:${clubName}`, tier:'root', domain:`teeMissPattern:${clubName}`,
+        severity: tm.domPct*Math.sqrt(tm.n)*0.5, n:tm.n,
+        line:`Off the tee, your ${clubName} misses ${tm.dom} ${tm.domPct}% of the time it misses the fairway.`,
+        detail:`Across ${tm.n} logged missed fairways with ${clubName} in play, ${tm.domPct}% missed ${tm.dom}${badNote}. Favor the opposite side of the fairway at address until this evens out.`,
+        drillTitle:`${clubName} tee-shot start-line drill`,
+        drillBody:`Set an alignment gate on your target line and hit 10 tee shots with your ${clubName}. Track how many still miss ${tm.dom}.`,
+        reassessLabel:`${clubName} tee shot miss direction`
       });
     }
   });
@@ -1155,6 +1480,48 @@ function computeMetricValue(key, roundsSubset){
     roundsSubset.forEach(r=>(r.holes||[]).forEach(h=>{ if(h.par===par){ n++; sum+=(h.score-h.par); } }));
     return n>=1?{value:sum/n,n}:null;
   }
+  if(key.startsWith('girMissPattern:')){
+    const clubName = key.split(':').slice(1).join(':');
+    let misses=[];
+    roundsSubset.forEach(r=>(r.holes||[]).forEach(h=>{
+      if(h.club===clubName && h.gir==='miss' && (h.girMissDist||h.girMissDir)) misses.push(h);
+    }));
+    if(!misses.length) return null;
+    const offCenter = misses.filter(h=>h.girMissDist!=='pin' || h.girMissDir!=='center').length;
+    return {value: offCenter/misses.length*100, n:misses.length};
+  }
+  if(key.startsWith('girByLie:')){
+    const lieId = key.split(':')[1];
+    let hit=0,total=0;
+    roundsSubset.forEach(r=>(r.holes||[]).forEach(h=>{ if(h.approachLie===lieId && h.gir!==null){ total++; if(h.gir==='hit') hit++; } }));
+    return total>=1?{value:hit/total*100,n:total}:null;
+  }
+  if(key.startsWith('lieDirectionCourse:')){
+    const lieId = key.split(':')[1];
+    let misses=[];
+    roundsSubset.forEach(r=>(r.holes||[]).forEach(h=>{
+      if(h.approachLie===lieId && h.gir==='miss' && (h.girMissDist||h.girMissDir)) misses.push(h);
+    }));
+    if(!misses.length) return null;
+    const offCenter = misses.filter(h=>h.girMissDist!=='pin' || h.girMissDir!=='center').length;
+    return {value: offCenter/misses.length*100, n:misses.length};
+  }
+  if(key.startsWith('teeClubFIR:')){
+    const clubName = key.split(':').slice(1).join(':');
+    let hit=0,total=0;
+    roundsSubset.forEach(r=>(r.holes||[]).forEach(h=>{ if(h.par!==3 && h.teeClub===clubName && h.fir!==null){ total++; if(h.fir==='hit') hit++; } }));
+    return total>=1?{value:hit/total*100,n:total}:null;
+  }
+  if(key.startsWith('teeMissPattern:')){
+    const clubName = key.split(':').slice(1).join(':');
+    let misses=[];
+    roundsSubset.forEach(r=>(r.holes||[]).forEach(h=>{
+      if(h.teeClub===clubName && h.fir==='miss' && h.firMissDir) misses.push(h);
+    }));
+    if(!misses.length) return null;
+    const bad = misses.filter(h=>h.firMissSeverity==='bad').length;
+    return {value: bad/misses.length*100, n:misses.length};
+  }
   return null;
 }
 function computeClubMetric(key, dateFilterFn){
@@ -1208,6 +1575,9 @@ let history = []; // {id, course, date, score, toPar, girPct, puttsAvg, holes}
 let courses = []; // courses-index summaries: {id, name, teeLabels}
 let courseEditor = null; // null | {id, name, tees:[{id,label,holes:[{par,yardage}]x18}]}
 let roundStartStep = null; // null | 'selectCourse' — shown before hole 1 of a new round
+let sprayFilterClub = 'all';
+let sprayFilterApproach = 'all';
+let sprayFairwayFilterClub = 'all';
 
 const app = document.getElementById('app');
 
@@ -1613,6 +1983,27 @@ async function checkForAppUpdate(){
     return;
   }
 
+  // Ask the server directly for the live file, bypassing every cache layer
+  // this page can bypass — the one check that can't be fooled by a service
+  // worker stuck mid-lifecycle (installed PWAs, especially on iOS, are known
+  // to be flaky about this). If the live version disagrees with what's
+  // running, force a full reset immediately instead of trusting the SW's own
+  // update dance to notice.
+  let liveVersion = null;
+  try{
+    const res = await fetch('round-log.html?_check=' + Date.now(), {cache:'no-store'});
+    const text = await res.text();
+    const match = text.match(/APP_VERSION\s*=\s*'([^']+)'/);
+    if(match) liveVersion = match[1];
+  }catch(e){ /* offline, or the fetch got blocked — fall back to the SW check below */ }
+
+  if(liveVersion && liveVersion !== APP_VERSION){
+    updateStatusMsg = `Found v${liveVersion} — forcing update…`;
+    render();
+    await forceHardReload();
+    return;
+  }
+
   let reg;
   try{ reg = await navigator.serviceWorker.getRegistration(); }catch(e){ /* fall through */ }
 
@@ -1624,12 +2015,16 @@ async function checkForAppUpdate(){
     return;
   }
 
-  // Ask the browser to fetch sw.js right now and byte-compare it, instead of
-  // waiting on its own update schedule — the same mechanism the browser uses
-  // internally, so a stale cached response can't mask a real update.
+  // Attach the listener BEFORE triggering the check. On a fast connection the
+  // whole install -> activate -> claim cycle can finish inside reg.update(),
+  // so checking reg.installing/reg.waiting only afterward can miss it
+  // entirely and wrongly report "up to date" even though it just updated.
+  navigator.serviceWorker.addEventListener('controllerchange', forceHardReload, {once:true});
+
   try{
     await reg.update();
   }catch(e){
+    navigator.serviceWorker.removeEventListener('controllerchange', forceHardReload);
     updateChecking = false;
     updateStatusMsg = 'Could not reach the server — check your connection and try again.';
     render();
@@ -1640,14 +2035,31 @@ async function checkForAppUpdate(){
   if(incoming){
     updateStatusMsg = 'Update found — applying now…';
     render();
-    navigator.serviceWorker.addEventListener('controllerchange', ()=>{ location.reload(); }, {once:true});
-    setTimeout(()=>location.reload(), 6000); // safety net if controllerchange never fires
+    setTimeout(forceHardReload, 6000); // safety net if controllerchange never fires
     return;
   }
 
+  navigator.serviceWorker.removeEventListener('controllerchange', forceHardReload);
   updateChecking = false;
   updateStatusMsg = `You're up to date — v${APP_VERSION}.`;
   render();
+}
+
+// The actual "force it": unregister the service worker, wipe every Cache
+// Storage entry it owns, then hard-navigate with a cache-busting query string
+// so neither the browser's HTTP cache nor a CDN edge cache in front of it can
+// hand back anything stale. Slower than trusting the SW lifecycle, but it
+// can't get stuck the way that can.
+async function forceHardReload(){
+  try{
+    const reg = await navigator.serviceWorker.getRegistration();
+    if(reg) await reg.unregister();
+  }catch(e){ /* best effort */ }
+  try{
+    const keys = await caches.keys();
+    await Promise.all(keys.map(k => caches.delete(k)));
+  }catch(e){ /* best effort */ }
+  window.location.href = window.location.pathname + '?_v=' + Date.now();
 }
 
 // ---------- My Bag ----------
@@ -2191,6 +2603,9 @@ function renderHomeView(){
 
 function renderRoundView(stats){
   const h = round.holes[currentHole];
+  if(h.par!==3 && h.teeClub==null){
+    h.teeClub = defaultTeeClubForHole(currentHole);
+  }
   const dots = round.holes.map((hh,i)=>{
     const cls = i===currentHole ? 'current' : (hh.gir!==null ? 'done' : '');
     return `<span class="${cls}"></span>`;
@@ -2255,11 +2670,17 @@ function renderRoundView(stats){
 
       ${h.par!==3 ? `
       <div class="field">
-        <span class="field-label">Fairway</span>
-        <div class="btn-row" id="firRow">
-          <button data-fir="hit" class="${h.fir==='hit'?'sel':''}">Hit</button>
-          <button data-fir="miss" class="${h.fir==='miss'?'sel bad':''}">Miss</button>
+        <span class="field-label">Club Off the Tee</span>
+        <div class="btn-row" id="teeClubRow" style="flex-wrap:wrap;">
+          ${CLUBS.map(c=>`<button data-teeclub="${c}" class="${h.teeClub===c?'sel':''}" style="flex:0 0 auto;padding:7px 9px;font-size:11.5px;">${c}</button>`).join('')}
         </div>
+      </div>
+      <div class="field">
+        <span class="field-label">Tee shot — tap where it finished</span>
+        ${renderFairwayDiagram('firDiagram', {current: h.firTap})}
+        <div class="na-note" style="text-align:center;">${h.firTap
+          ? (h.fir==='hit' ? 'Fairway.' : `Missed the fairway ${h.firMissDir}${h.firMissSeverity==='bad'?' — well off it' : ' — first cut/rough'}.`)
+          : 'The shaded strip is the fairway. Tap where the tee shot came to rest.'}</div>
       </div>` : `<div class="na-note">Par 3 — no fairway to track. Tee shot goes straight at the green.</div>`}
 
       <div class="field">
@@ -2274,25 +2695,32 @@ function renderRoundView(stats){
         </div>
       </div>
 
+      <div class="field">
+        <span class="field-label">Lie for the Approach</span>
+        <div class="btn-row" id="approachLieRow" style="flex-wrap:wrap;">
+          ${LIES.map(l=>`<button data-approachlie="${l.id}" class="${h.approachLie===l.id?'sel':''}" style="flex:0 0 auto;padding:7px 9px;font-size:11.5px;">${l.label}</button>`).join('')}
+        </div>
+        <div class="na-note">${h.par===3 ? "Set automatically — it's a tee shot." : "Set automatically from your tee shot tap. A bad miss defaults to Heavy Rough since the tap can't tell that from a bunker or trees — tap a different lie above if that's what actually happened."}</div>
+      </div>
+
       ${h.approachYards!=null ? (
         caddieOpenHole===currentHole ? renderInlineCaddie(h) : `<button class="get-club-btn" id="getClubBtn">Get Club Recommendation</button>`
       ) : ``}
 
       <div class="field" style="margin-top:16px;">
         <span class="field-label">Club Into Green</span>
-        <select class="field-select" id="clubSelect">
-          <option value="">Select club</option>
-          ${CLUBS.map(c=>`<option value="${c}" ${h.club===c?'selected':''}>${c}</option>`).join('')}
-        </select>
+        <div class="btn-row" id="clubIntoGreenRow" style="flex-wrap:wrap;">
+          ${CLUBS.map(c=>`<button data-clubintogreen="${c}" class="${h.club===c?'sel':''}" style="flex:0 0 auto;padding:7px 9px;font-size:11.5px;">${c}</button>`).join('')}
+        </div>
         ${h.recClub ? `<div class="na-note">Caddie recommended <b>${escapeHtml(h.recClub)}</b> (${escapeHtml(h.recSwing||'')}). ${h.followedRec===false?'You went with something else.':'You went with it.'}</div>` : ``}
       </div>
 
       <div class="field">
-        <span class="field-label">Green In Regulation</span>
-        <div class="btn-row" id="girRow">
-          <button data-gir="hit" class="${h.gir==='hit'?'sel':''}">Hit</button>
-          <button data-gir="miss" class="${h.gir==='miss'?'sel bad':''}">Miss</button>
-        </div>
+        <span class="field-label">Approach — tap where it finished</span>
+        ${renderGreenDiagram('girMissDiagram', {current: h.girTap})}
+        <div class="na-note" style="text-align:center;">${h.girTap
+          ? (h.gir==='hit' ? 'Green in regulation.' : `${girMissLabel(h)} — ${Math.round(Math.abs(h.girTap.long))}y ${h.girTap.long>=0?'long':'short'}, ${Math.round(Math.abs(h.girTap.lateral))}y ${h.girTap.lateral>=0?'right':'left'}${h.girMissSeverity==='bad'?' (well off target)':''}`)
+          : 'Flag is the pin, shaded circle is the green. Tap where the ball actually finished.'}</div>
       </div>
 
       ${h.gir==='miss' ? `
@@ -2317,6 +2745,7 @@ function renderRoundView(stats){
           ${[['in10','Inside 10ft'],['10to25','10-25ft'],['25plus','25ft+']].map(([v,l])=>
             `<button data-puttdist="${v}" class="${h.puttDist===v?'sel':''}">${l}</button>`).join('')}
         </div>
+        ${h.gir==='hit' ? `<div class="na-note">Estimated from your approach tap — tap a different bucket above if it's off.</div>` : ``}
       </div>
     </section>
 
@@ -2330,8 +2759,8 @@ function renderRoundView(stats){
             return `<tr class="${i===currentHole?'current-row':''}" data-jump="${i}">
               <td>${i+1}</td><td>${hh.par}</td>
               <td class="${scoreCls}">${hh.score}</td>
-              <td>${hh.par===3?'—':(hh.fir==='hit'?'✓':hh.fir==='miss'?'✕':'')}</td>
-              <td>${hh.gir==='hit'?'✓':hh.gir==='miss'?'✕':''}</td>
+              <td>${hh.par===3?'—':(hh.fir==='hit'?'✓':hh.fir==='miss'?`<span title="${hh.firMissDir?('Missed '+hh.firMissDir):'Missed fairway'}" style="${hh.firMissSeverity==='bad'?'color:var(--red);font-weight:600;':''}">${hh.firMissDir==='left'?'L':hh.firMissDir==='right'?'R':'✕'}</span>`:'')}</td>
+              <td>${hh.gir==='hit'?'✓':hh.gir==='miss'?`<span title="${escapeHtml(girMissLabel(hh))}" style="${hh.girMissSeverity==='bad'?'color:var(--red);font-weight:600;':''}">${girMissAbbrev(hh)}</span>`:''}</td>
               <td>${hh.putts}</td>
             </tr>`;
           }).join('')}
@@ -2416,7 +2845,87 @@ function renderHistoryView(){
         <h4>Putts per round — last ${puttsSeries.length} rounds</h4>
         ${sparkline(puttsSeries, 24, 44, true)}
       </div>
+
+      ${renderSprayChartSection()}
+      ${renderFairwaySprayChartSection()}
     </section>
+  `;
+}
+
+// Aggregates every tapped approach shot (hit or miss — the tap is captured
+// either way now) across the rounds already loaded for the Focus engine
+// (cachedFullRounds — last 8 rounds, same window the rest of the insights use)
+// into one filterable dispersion chart.
+function renderSprayChartSection(){
+  const allShots = [];
+  cachedFullRounds.forEach(r=>(r.holes||[]).forEach(h=>{
+    if(h.girTap) allShots.push(h);
+  }));
+  if(allShots.length < 3){
+    return `
+      <div class="sparkline-block">
+        <h4>Approach Spray Chart</h4>
+        <div class="na-note">Tap the approach diagram on a few holes during your rounds and your dispersion pattern will build up here (last ${Math.min(history.length,8)} rounds).</div>
+      </div>`;
+  }
+  const filtered = allShots.filter(h =>
+    (sprayFilterClub==='all' || h.club===sprayFilterClub) &&
+    (sprayFilterApproach==='all' || h.approach===sprayFilterApproach)
+  );
+  const clubsInPlay = CLUBS.filter(c => allShots.some(h=>h.club===c));
+  const approachesInPlay = APPROACH_RANGES.filter(a => allShots.some(h=>h.approach===a));
+  const missesOnly = filtered.filter(h=>h.gir==='miss');
+  const badCount = missesOnly.filter(h=>h.girMissSeverity==='bad').length;
+  return `
+    <div class="sparkline-block">
+      <h4>Approach Spray Chart</h4>
+      <div class="compact-grid">
+        <select class="field-select" id="sprayClubFilter">
+          <option value="all" ${sprayFilterClub==='all'?'selected':''}>All Clubs</option>
+          ${clubsInPlay.map(c=>`<option value="${c}" ${sprayFilterClub===c?'selected':''}>${c}</option>`).join('')}
+        </select>
+        <select class="field-select" id="sprayApproachFilter">
+          <option value="all" ${sprayFilterApproach==='all'?'selected':''}>All Distances</option>
+          ${approachesInPlay.map(a=>`<option value="${a}" ${sprayFilterApproach===a?'selected':''}>${a}y</option>`).join('')}
+        </select>
+      </div>
+      ${filtered.length
+        ? renderGreenDiagram('sprayChartDiagram', {dots: filtered.map(h=>({...h.girTap, severity: h.gir==='hit' ? null : h.girMissSeverity}))})
+        : `<div class="na-note">No approach shots logged for that filter yet.</div>`}
+      <div class="na-note" style="text-align:center;">${filtered.length} shot${filtered.length===1?'':'s'} plotted, ${missesOnly.length} missed the green · <span style="color:var(--green-deep);">●</span> hit · <span style="color:var(--gold);">●</span> near miss · <span style="color:var(--red);">●</span> bad miss (${badCount} of ${missesOnly.length||1})</div>
+    </div>
+  `;
+}
+
+// Same idea for tee shots — filterable by club off the tee.
+function renderFairwaySprayChartSection(){
+  const allShots = [];
+  cachedFullRounds.forEach(r=>(r.holes||[]).forEach(h=>{
+    if(h.par!==3 && h.firTap) allShots.push(h);
+  }));
+  if(allShots.length < 3){
+    return `
+      <div class="sparkline-block">
+        <h4>Tee Shot Spray Chart</h4>
+        <div class="na-note">Tap the fairway diagram on a few tee shots during your rounds and your dispersion pattern will build up here (last ${Math.min(history.length,8)} rounds).</div>
+      </div>`;
+  }
+  const filtered = allShots.filter(h => sprayFairwayFilterClub==='all' || h.teeClub===sprayFairwayFilterClub);
+  const clubsInPlay = CLUBS.filter(c => allShots.some(h=>h.teeClub===c));
+  const missesOnly = filtered.filter(h=>h.fir==='miss');
+  const badCount = missesOnly.filter(h=>h.firMissSeverity==='bad').length;
+  return `
+    <div class="sparkline-block">
+      <h4>Tee Shot Spray Chart</h4>
+      <select class="field-select" id="sprayFairwayClubFilter">
+        <option value="all" ${sprayFairwayFilterClub==='all'?'selected':''}>All Clubs</option>
+        ${clubsInPlay.map(c=>`<option value="${c}" ${sprayFairwayFilterClub===c?'selected':''}>${c}</option>`).join('')}
+      </select>
+      ${filtered.length
+        ? renderFairwayDiagram('fairwaySprayChartDiagram', {dots: filtered.map(h=>({...h.firTap, severity: h.fir==='hit' ? null : h.firMissSeverity}))})
+        : `<div class="na-note">No tee shots logged for that filter yet.</div>`}
+      <div class="na-note" style="text-align:center;">${filtered.length} tee shot${filtered.length===1?'':'s'} plotted, ${missesOnly.length} missed the fairway · <span style="color:var(--green-deep);">●</span> hit · <span style="color:var(--gold);">●</span> near miss · <span style="color:var(--red);">●</span> bad miss (${badCount} of ${missesOnly.length||1})</div>
+    </div>
   `;
 }
 
@@ -2433,6 +2942,14 @@ function sparkline(values, min, max, invert){
   </svg>`;
 }
 
+function wireSprayChartHandlers(){
+  const clubSel = document.getElementById('sprayClubFilter');
+  if(clubSel) clubSel.onchange = e => { sprayFilterClub = e.target.value; render(); };
+  const approachSel = document.getElementById('sprayApproachFilter');
+  if(approachSel) approachSel.onchange = e => { sprayFilterApproach = e.target.value; render(); };
+  const fairwayClubSel = document.getElementById('sprayFairwayClubFilter');
+  if(fairwayClubSel) fairwayClubSel.onchange = e => { sprayFairwayFilterClub = e.target.value; render(); };
+}
 function escapeHtml(s){
   return (s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
@@ -2519,6 +3036,7 @@ function attachHandlers(){
       e.stopPropagation();
       deleteRound(b.dataset.delid);
     });
+    wireSprayChartHandlers();
     return;
   }
 
@@ -2706,14 +3224,27 @@ function attachHandlers(){
 
   document.querySelectorAll('#parRow button').forEach(b=>b.onclick=()=>{
     h.par = Number(b.dataset.par);
-    if(h.par===3){ h.fir=null; }
+    if(h.par===3){ h.fir=null; h.firTap=null; h.firMissDir=null; h.firMissSeverity=null; h.teeClub=null; }
+    h.approachLie = inferApproachLie(h);
     roundInProgress=true;
     render();
   });
-  const firRow = document.getElementById('firRow');
-  if(firRow) firRow.querySelectorAll('button').forEach(b=>b.onclick=()=>{ h.fir = b.dataset.fir; roundInProgress=true; render(); });
+  const teeClubRow = document.getElementById('teeClubRow');
+  if(teeClubRow) teeClubRow.querySelectorAll('button').forEach(b=>b.onclick=()=>{ h.teeClub = b.dataset.teeclub; roundInProgress=true; render(); });
+  attachDiagramTapHandler('firDiagram', FAIRWAY_DIAGRAM_YARDS, tap=>{
+    const {fir, dir, severity} = classifyFairwayTap(tap);
+    h.firTap = tap;
+    h.fir = fir;
+    h.firMissDir = dir;
+    h.firMissSeverity = severity;
+    h.approachLie = inferApproachLie(h);
+    roundInProgress = true;
+    render();
+  });
 
   document.querySelectorAll('#approachRow button').forEach(b=>b.onclick=()=>{ h.approach = b.dataset.approach; roundInProgress=true; render(); });
+  const approachLieRow = document.getElementById('approachLieRow');
+  if(approachLieRow) approachLieRow.querySelectorAll('button').forEach(b=>b.onclick=()=>{ h.approachLie = b.dataset.approachlie; roundInProgress=true; render(); });
 
   const ayInput = document.getElementById('approachYardsInput');
   if(ayInput) ayInput.onchange = e => {
@@ -2746,21 +3277,27 @@ function attachHandlers(){
   const blowupRow = document.getElementById('blowupRow');
   if(blowupRow) blowupRow.querySelectorAll('button').forEach(b=>b.onclick=()=>{ h.blowup = b.dataset.blowup; roundInProgress=true; render(); });
 
-  const clubSelect = document.getElementById('clubSelect');
-  if(clubSelect) clubSelect.onchange = e => {
-    h.club = e.target.value;
-    if(h.recClub){ h.followedRec = (e.target.value === h.recClub); }
-    roundInProgress=true;
-  };
-
-  document.querySelectorAll('#girRow button').forEach(b=>b.onclick=()=>{
-    h.gir = b.dataset.gir;
-    if(h.gir==='hit') h.ud=null;
+  const clubIntoGreenRow = document.getElementById('clubIntoGreenRow');
+  if(clubIntoGreenRow) clubIntoGreenRow.querySelectorAll('button').forEach(b=>b.onclick=()=>{
+    h.club = b.dataset.clubintogreen;
+    if(h.recClub){ h.followedRec = (h.club === h.recClub); }
     roundInProgress=true;
     render();
   });
+
   const udRow = document.getElementById('udRow');
   if(udRow) udRow.querySelectorAll('button').forEach(b=>b.onclick=()=>{ h.ud = b.dataset.ud; roundInProgress=true; render(); });
+  attachDiagramTapHandler('girMissDiagram', TARGET_DIAGRAM_YARDS, tap=>{
+    const {gir, dir, dist, severity} = classifyGreenTap(tap);
+    h.girTap = tap;
+    h.gir = gir;
+    h.girMissDir = dir;
+    h.girMissDist = dist;
+    h.girMissSeverity = severity;
+    if(gir==='hit'){ h.ud = null; h.puttDist = inferFirstPuttDist(h); }
+    roundInProgress = true;
+    render();
+  });
 
   document.querySelectorAll('#puttsRow button').forEach(b=>b.onclick=()=>{ h.putts = Number(b.dataset.putts); roundInProgress=true; render(); });
   const puttDistRow = document.getElementById('puttDistRow');
