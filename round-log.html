@@ -1,0 +1,2646 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Round Log">
+<meta name="theme-color" content="#1F3D2E">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="manifest" href="manifest.json">
+<title>Round Log</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#F2EEE2;
+    --paper-raised:#FBF9F2;
+    --line:#D8D2BE;
+    --line-strong:#B9B29A;
+    --ink:#26261F;
+    --ink-soft:#5B5A4E;
+    --green-deep:#1F3D2E;
+    --green-mid:#3F6B4F;
+    --green-pale:#DCE6DC;
+    --red:#A8402C;
+    --red-pale:#F1DAD3;
+    --gold:#A6822F;
+    --gold-pale:#EFE4C4;
+    --radius:10px;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:
+      linear-gradient(var(--paper), var(--paper)),
+      repeating-linear-gradient(0deg, transparent, transparent 27px, rgba(31,61,46,0.035) 28px);
+    background-color:var(--paper);
+    color:var(--ink);
+    font-family:'Inter',sans-serif;
+    -webkit-font-smoothing:antialiased;
+    min-height:100vh;
+  }
+  .app{max-width:480px;margin:0 auto;padding:0 0 40px;}
+
+  /* Masthead */
+  header.mast{
+    background:var(--green-deep);
+    color:var(--paper-raised);
+    padding:20px 20px 16px;
+    border-bottom:4px solid var(--gold);
+  }
+  header.mast .eyebrow{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11px;
+    letter-spacing:0.14em;
+    text-transform:uppercase;
+    color:var(--gold-pale);
+    opacity:0.85;
+  }
+  header.mast h1{
+    font-family:'Fraunces',serif;
+    font-weight:600;
+    font-size:30px;
+    margin:2px 0 12px;
+    letter-spacing:-0.01em;
+  }
+  .mast-row{display:flex;gap:10px;}
+  .mast-input{
+    flex:1;
+    background:rgba(255,255,255,0.08);
+    border:1px solid rgba(255,255,255,0.25);
+    border-radius:6px;
+    color:var(--paper-raised);
+    padding:8px 10px;
+    font-family:'Inter',sans-serif;
+    font-size:13px;
+  }
+  .mast-input::placeholder{color:rgba(251,249,242,0.5);}
+
+  /* Tabs */
+  nav.tabs{
+    display:flex;
+    border-bottom:1px solid var(--line-strong);
+    background:var(--paper-raised);
+  }
+  nav.tabs button{
+    flex:1;
+    padding:12px 2px;
+    border:none;
+    background:none;
+    font-family:'IBM Plex Mono',monospace;
+    font-size:10.5px;
+    letter-spacing:0.04em;
+    text-transform:uppercase;
+    color:var(--ink-soft);
+    border-bottom:3px solid transparent;
+    cursor:pointer;
+  }
+
+  /* ---- My Bag ---- */
+  .bag-row{
+    display:flex;align-items:center;gap:8px;
+    background:var(--paper-raised);border:1px solid var(--line);
+    border-radius:8px;padding:8px 10px;margin-bottom:6px;
+  }
+  .bag-row .bn{flex:1;font-size:13.5px;font-weight:500;}
+  .bag-row .by{
+    width:64px;padding:6px 4px;text-align:center;
+    font-family:'IBM Plex Mono',monospace;font-size:14px;font-weight:600;
+    border:1px solid var(--line-strong);border-radius:6px;
+    background:var(--paper);color:var(--green-deep);
+  }
+  .bag-row .beff{
+    font-family:'IBM Plex Mono',monospace;font-size:10.5px;
+    color:var(--gold);width:58px;text-align:right;line-height:1.25;
+  }
+  .bag-row .brm{
+    background:none;border:none;color:var(--line-strong);
+    font-size:18px;cursor:pointer;padding:0 2px;line-height:1;
+  }
+  .bag-add{display:flex;gap:6px;margin-top:10px;}
+  .bag-add input{
+    flex:1;padding:8px 10px;border:1px solid var(--line-strong);
+    border-radius:6px;background:var(--paper-raised);font-size:13px;
+  }
+  .bag-add input.num{flex:0 0 70px;text-align:center;font-family:'IBM Plex Mono',monospace;}
+  .bag-add button{
+    flex:0 0 54px;border:none;border-radius:6px;background:var(--green-deep);
+    color:var(--paper-raised);font-weight:600;font-size:13px;cursor:pointer;
+  }
+  .gap-flag{
+    font-family:'IBM Plex Mono',monospace;font-size:11px;
+    padding:3px 0 3px 10px;border-left:2px solid var(--red);
+    color:var(--ink-soft);margin:2px 0 6px 8px;
+  }
+  .gap-flag.ok{border-left-color:var(--green-mid);}
+  table.matrix{width:100%;border-collapse:collapse;font-family:'IBM Plex Mono',monospace;font-size:12px;}
+  table.matrix th{
+    font-size:10px;text-transform:uppercase;letter-spacing:0.05em;color:var(--ink-soft);
+    padding:6px 4px;border-bottom:1px solid var(--line-strong);font-weight:500;
+  }
+  table.matrix td{padding:7px 4px;text-align:center;border-bottom:1px solid var(--line);}
+  table.matrix td.cname{text-align:left;font-family:'Inter',sans-serif;font-size:12.5px;}
+
+  /* ---- Caddie ---- */
+  .target-box{
+    background:var(--green-deep);color:var(--paper-raised);
+    padding:16px 20px;text-align:center;
+  }
+  .target-box .tlabel{
+    font-family:'IBM Plex Mono',monospace;font-size:10.5px;
+    letter-spacing:0.12em;text-transform:uppercase;color:var(--gold-pale);
+  }
+  .target-box .tinput{
+    width:120px;background:transparent;border:none;border-bottom:2px solid var(--gold);
+    color:var(--paper-raised);font-family:'IBM Plex Mono',monospace;
+    font-size:42px;font-weight:600;text-align:center;padding:2px 0;
+  }
+  .target-steps{display:flex;justify-content:center;gap:8px;margin-top:10px;}
+  .target-steps button{
+    padding:6px 12px;border-radius:6px;border:1px solid rgba(255,255,255,0.3);
+    background:rgba(255,255,255,0.08);color:var(--paper-raised);
+    font-family:'IBM Plex Mono',monospace;font-size:12px;cursor:pointer;
+  }
+  .plays-like{
+    background:var(--gold-pale);border-bottom:1px solid var(--gold);
+    padding:12px 20px;text-align:center;
+  }
+  .plays-like .pl-num{
+    font-family:'IBM Plex Mono',monospace;font-size:30px;font-weight:600;color:var(--green-deep);
+  }
+  .plays-like .pl-lbl{
+    font-size:10.5px;text-transform:uppercase;letter-spacing:0.1em;color:var(--ink-soft);
+  }
+  .breakdown{
+    display:flex;flex-wrap:wrap;gap:5px;justify-content:center;margin-top:8px;
+  }
+  .breakdown span{
+    font-family:'IBM Plex Mono',monospace;font-size:10.5px;
+    background:var(--paper-raised);border:1px solid var(--line);
+    border-radius:4px;padding:2px 6px;color:var(--ink-soft);
+  }
+  .rec-card{
+    background:var(--paper-raised);border:1px solid var(--line);
+    border-radius:var(--radius);padding:12px 14px;margin-bottom:8px;
+    display:flex;align-items:center;gap:12px;
+  }
+  .rec-card.primary{border:2px solid var(--green-deep);background:var(--green-pale);}
+  .rec-rank{
+    font-family:'IBM Plex Mono',monospace;font-size:10px;
+    width:22px;height:22px;border-radius:50%;flex:0 0 22px;
+    display:flex;align-items:center;justify-content:center;
+    background:var(--green-deep);color:var(--paper-raised);
+  }
+  .rec-card.primary .rec-rank{background:var(--gold);color:var(--green-deep);}
+  .rec-body{flex:1;}
+  .rec-club{font-family:'Fraunces',serif;font-size:16px;font-weight:600;}
+  .rec-swing{
+    font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-soft);
+    text-transform:uppercase;letter-spacing:0.05em;margin-top:1px;
+  }
+  .rec-yards{text-align:right;font-family:'IBM Plex Mono',monospace;}
+  .rec-yards .ry{font-size:19px;font-weight:600;color:var(--green-deep);}
+  .rec-yards .rd{font-size:10.5px;color:var(--ink-soft);}
+  .lie-note{
+    font-size:12.5px;line-height:1.5;color:var(--ink);
+    background:var(--red-pale);border-left:3px solid var(--red);
+    padding:9px 12px;border-radius:0 6px 6px 0;margin-bottom:10px;
+  }
+  .compact-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .mini-input{
+    width:100%;padding:8px;border:1px solid var(--line-strong);border-radius:6px;
+    background:var(--paper-raised);font-family:'IBM Plex Mono',monospace;
+    font-size:13px;text-align:center;
+  }
+  nav.tabs button.active{color:var(--green-deep);border-bottom-color:var(--green-deep);font-weight:600;}
+
+  section{padding:18px 20px;}
+
+  /* Score-to-par big readout */
+  .headline-stats{
+    display:flex;
+    gap:10px;
+    padding:16px 20px 4px;
+  }
+  .stat-tile{
+    flex:1;
+    background:var(--paper-raised);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    padding:10px 6px;
+    text-align:center;
+  }
+  .stat-tile .num{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:22px;
+    font-weight:600;
+    color:var(--green-deep);
+  }
+  .stat-tile .lbl{
+    font-size:10px;
+    text-transform:uppercase;
+    letter-spacing:0.06em;
+    color:var(--ink-soft);
+    margin-top:2px;
+  }
+
+  /* Hole navigator */
+  .hole-nav{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding:14px 20px 6px;
+  }
+  .hole-nav button.arrow{
+    width:38px;height:38px;
+    border-radius:50%;
+    border:1px solid var(--line-strong);
+    background:var(--paper-raised);
+    font-size:16px;
+    color:var(--green-deep);
+    cursor:pointer;
+  }
+  .hole-nav button.arrow:disabled{opacity:0.3;cursor:default;}
+  .hole-badge{
+    font-family:'Fraunces',serif;
+    font-size:15px;
+    color:var(--ink-soft);
+    display:flex;
+    align-items:center;
+    gap:10px;
+  }
+  .hole-badge .hnum{
+    font-size:34px;
+    font-weight:700;
+    color:var(--ink);
+    line-height:1;
+  }
+  .hole-dots{display:flex;gap:3px;flex-wrap:wrap;max-width:120px;}
+  .hole-dots span{
+    width:7px;height:7px;border-radius:50%;
+    background:var(--line-strong);
+  }
+  .hole-dots span.done{background:var(--green-mid);}
+  .hole-dots span.current{background:var(--red);}
+
+  /* Score display with golf scoring convention shapes */
+  .score-display{
+    display:flex;justify-content:center;align-items:center;
+    padding:6px 20px 14px;
+  }
+  .score-shape{
+    width:64px;height:64px;
+    display:flex;align-items:center;justify-content:center;
+    font-family:'IBM Plex Mono',monospace;
+    font-size:26px;font-weight:600;
+    position:relative;
+  }
+  .score-shape .core{
+    width:52px;height:52px;
+    display:flex;align-items:center;justify-content:center;
+    border-radius:50%;
+  }
+  .shape-eagle .core{border:2px solid var(--gold);border-radius:50%;box-shadow:0 0 0 4px var(--paper) inset, 0 0 0 5px var(--gold);}
+  .shape-birdie .core{border:2px solid var(--gold);border-radius:50%;}
+  .shape-par .core{border:none;}
+  .shape-bogey .core{border:2px solid var(--red);border-radius:4px;}
+  .shape-double .core{border:2px solid var(--red);border-radius:4px;box-shadow:0 0 0 4px var(--paper) inset, 0 0 0 5px var(--red);}
+  .score-caption{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:0.08em;
+    text-align:center;margin-top:-6px;
+  }
+  .score-steppers{display:flex;justify-content:center;gap:16px;margin-top:8px;}
+  .score-steppers button{
+    width:34px;height:34px;border-radius:50%;
+    border:1px solid var(--line-strong);background:var(--paper-raised);
+    font-size:18px;color:var(--green-deep);cursor:pointer;
+  }
+
+  /* Field groups */
+  .field{margin-bottom:16px;}
+  .field-label{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11px;text-transform:uppercase;letter-spacing:0.08em;
+    color:var(--ink-soft);margin-bottom:6px;display:block;
+  }
+  .btn-row{display:flex;gap:8px;flex-wrap:wrap;}
+  .btn-row button{
+    flex:1;
+    min-width:56px;
+    padding:9px 6px;
+    border-radius:8px;
+    border:1px solid var(--line-strong);
+    background:var(--paper-raised);
+    color:var(--ink);
+    font-family:'Inter',sans-serif;
+    font-size:13px;font-weight:500;
+    cursor:pointer;
+  }
+  .btn-row button.sel{
+    background:var(--green-deep);
+    border-color:var(--green-deep);
+    color:var(--paper-raised);
+  }
+  .btn-row button.sel.bad{background:var(--red);border-color:var(--red);}
+  select.field-select{
+    width:100%;padding:9px 10px;border-radius:8px;
+    border:1px solid var(--line-strong);background:var(--paper-raised);
+    font-family:'Inter',sans-serif;font-size:13px;color:var(--ink);
+  }
+  .na-note{font-size:12px;color:var(--ink-soft);font-style:italic;padding:8px 2px;}
+
+  .save-btn{
+    width:100%;padding:13px;border-radius:8px;border:none;
+    background:var(--green-deep);color:var(--paper-raised);
+    font-family:'Inter',sans-serif;font-weight:600;font-size:14px;
+    cursor:pointer;margin-top:6px;
+  }
+  .finish-btn{
+    width:100%;padding:13px;border-radius:8px;border:2px solid var(--gold);
+    background:var(--gold-pale);color:var(--green-deep);
+    font-family:'Inter',sans-serif;font-weight:700;font-size:14px;
+    cursor:pointer;margin-top:10px;
+  }
+
+  /* Ledger table */
+  .ledger-wrap{padding:8px 20px 4px;overflow-x:auto;}
+  table.ledger{
+    width:100%;border-collapse:collapse;
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11px;
+  }
+  table.ledger th{
+    text-align:center;color:var(--ink-soft);font-weight:500;
+    padding:5px 3px;border-bottom:1px solid var(--line-strong);
+    text-transform:uppercase;font-size:9.5px;letter-spacing:0.02em;
+  }
+  table.ledger td{
+    text-align:center;padding:6px 3px;border-bottom:1px solid var(--line);
+  }
+  table.ledger tr.current-row td{background:var(--green-pale);}
+  table.ledger td.score-over{color:var(--red);font-weight:600;}
+  table.ledger td.score-under{color:var(--gold);font-weight:600;}
+
+  /* Insights */
+  .insights-panel{
+    margin:18px 20px 4px;
+    background:var(--paper-raised);
+    border:1px solid var(--line);
+    border-left:4px solid var(--green-deep);
+    border-radius:0 var(--radius) var(--radius) 0;
+    padding:14px 16px;
+  }
+  .insights-panel h3{
+    font-family:'Fraunces',serif;font-size:15px;margin:0 0 8px;color:var(--green-deep);
+  }
+  .insights-panel ul{margin:0;padding-left:18px;}
+  .insights-panel li{font-size:13.5px;line-height:1.5;margin-bottom:8px;color:var(--ink);}
+  .insights-panel li b{color:var(--green-deep);}
+  .insights-panel .empty{font-size:13px;color:var(--ink-soft);font-style:italic;}
+
+  /* History */
+  .round-card{
+    background:var(--paper-raised);border:1px solid var(--line);
+    border-radius:var(--radius);padding:12px 14px;margin-bottom:10px;
+    display:flex;justify-content:space-between;align-items:center;
+  }
+  .round-card .rc-left .rc-course{font-family:'Fraunces',serif;font-size:15px;}
+  .round-card .rc-left .rc-date{font-size:11px;color:var(--ink-soft);}
+  .round-card .rc-right{text-align:right;font-family:'IBM Plex Mono',monospace;}
+  .round-card .rc-score{font-size:20px;font-weight:600;}
+  .round-card .rc-topar{font-size:11px;color:var(--ink-soft);}
+  .sparkline-block{margin-top:20px;}
+  .sparkline-block h4{
+    font-family:'IBM Plex Mono',monospace;font-size:11px;text-transform:uppercase;
+    letter-spacing:0.08em;color:var(--ink-soft);margin-bottom:6px;
+  }
+  .empty-state{
+    text-align:center;padding:40px 20px;color:var(--ink-soft);font-size:13.5px;
+  }
+  .empty-state b{display:block;font-family:'Fraunces',serif;font-size:17px;color:var(--ink);margin-bottom:6px;font-weight:600;}
+
+  .rc-del{
+    background:none;border:none;color:var(--red);font-size:11px;
+    font-family:'IBM Plex Mono',monospace;text-transform:uppercase;letter-spacing:0.05em;
+    cursor:pointer;padding:4px 0;margin-top:6px;
+  }
+  .round-card{flex-wrap:wrap;}
+  .round-card .rc-right{display:flex;flex-direction:column;align-items:flex-end;}
+
+  /* Home screen */
+  .career-stats{
+    display:grid;grid-template-columns:repeat(2,1fr);gap:10px;
+    padding:16px 20px 4px;
+  }
+  .career-tile{
+    background:var(--paper-raised);border:1px solid var(--line);border-radius:var(--radius);
+    padding:14px 12px;
+  }
+  .career-tile .num{font-family:'IBM Plex Mono',monospace;font-size:24px;font-weight:600;color:var(--green-deep);}
+  .career-tile .lbl{font-size:10.5px;text-transform:uppercase;letter-spacing:0.06em;color:var(--ink-soft);margin-top:2px;}
+
+  .action-card{
+    display:flex;align-items:center;justify-content:space-between;
+    background:var(--green-deep);color:var(--paper-raised);
+    border-radius:var(--radius);padding:16px 18px;margin:16px 20px 0;cursor:pointer;
+    border:none;width:calc(100% - 40px);text-align:left;
+  }
+  .action-card.secondary{
+    background:var(--paper-raised);color:var(--ink);border:1px solid var(--line-strong);
+  }
+  .action-card .ac-title{font-family:'Fraunces',serif;font-size:16px;font-weight:600;}
+  .action-card .ac-sub{font-size:11.5px;opacity:0.75;margin-top:2px;}
+  .action-card .ac-arrow{font-size:20px;}
+
+  .home-section-title{
+    font-family:'IBM Plex Mono',monospace;font-size:11px;text-transform:uppercase;
+    letter-spacing:0.08em;color:var(--ink-soft);margin:22px 20px 8px;
+  }
+  .view-all{
+    display:block;text-align:center;font-size:12.5px;color:var(--green-mid);
+    font-family:'Inter',sans-serif;font-weight:600;padding:6px 20px 4px;cursor:pointer;
+  }
+
+  /* Focus system */
+  .focus-card{
+    background:var(--paper-raised);border:1px solid var(--line);border-radius:var(--radius);
+    margin:0 20px 10px;overflow:hidden;
+  }
+  .focus-card.root{border-left:4px solid var(--red);}
+  .focus-card.symptom{border-left:4px solid var(--green-mid);}
+  .fc-head{padding:12px 14px;cursor:pointer;display:flex;align-items:center;gap:10px;}
+  .fc-tag{
+    font-family:'IBM Plex Mono',monospace;font-size:9px;text-transform:uppercase;letter-spacing:0.05em;
+    padding:2px 6px;border-radius:4px;flex:0 0 auto;
+  }
+  .fc-tag.root{background:var(--red-pale);color:var(--red);}
+  .fc-tag.symptom{background:var(--green-pale);color:var(--green-deep);}
+  .fc-line{font-size:13px;line-height:1.4;flex:1;}
+  .fc-chev{font-size:14px;color:var(--ink-soft);flex:0 0 auto;}
+  .fc-body{padding:0 14px 14px;border-top:1px solid var(--line);}
+  .fc-body p{font-size:13px;line-height:1.5;margin:10px 0;}
+  .drill-box{
+    background:var(--gold-pale);border-radius:8px;padding:10px 12px;margin:8px 0;
+  }
+  .drill-box .dtitle{font-family:'Fraunces',serif;font-weight:600;font-size:13.5px;color:var(--green-deep);margin-bottom:4px;}
+  .drill-box .dbody{font-size:12.5px;line-height:1.5;}
+  .log-practice-btn{
+    width:100%;padding:9px;border-radius:6px;border:1px solid var(--green-deep);
+    background:none;color:var(--green-deep);font-weight:600;font-size:12.5px;
+    cursor:pointer;margin-top:6px;
+  }
+  .before-after{
+    font-family:'IBM Plex Mono',monospace;font-size:12px;margin-top:8px;
+    background:var(--paper);border-radius:6px;padding:8px 10px;
+  }
+  .practice-entry{font-size:11.5px;color:var(--ink-soft);padding:3px 0;border-bottom:1px solid var(--line);}
+
+  /* Inline caddie in round flow */
+  .get-club-btn{
+    width:100%;padding:10px;border-radius:8px;border:1px dashed var(--green-mid);
+    background:var(--green-pale);color:var(--green-deep);font-weight:600;font-size:13px;
+    cursor:pointer;margin-top:6px;
+  }
+  .inline-caddie{
+    background:var(--paper);border:1px solid var(--line-strong);border-radius:var(--radius);
+    padding:12px;margin-top:8px;
+  }
+  .mini-plays-like{
+    text-align:center;font-family:'IBM Plex Mono',monospace;
+    background:var(--green-deep);color:var(--paper-raised);border-radius:8px;
+    padding:8px;margin-bottom:8px;
+  }
+  .mini-plays-like .mpl-num{font-size:22px;font-weight:600;}
+  .use-club-btn{
+    width:100%;text-align:left;background:var(--paper-raised);border:1px solid var(--line);
+    border-radius:8px;padding:9px 12px;margin-bottom:6px;cursor:pointer;
+    display:flex;justify-content:space-between;align-items:center;
+  }
+  .use-club-btn .ucb-name{font-family:'Fraunces',serif;font-size:14px;font-weight:600;}
+  .use-club-btn .ucb-sub{font-size:10.5px;color:var(--ink-soft);}
+  .use-club-btn .ucb-y{font-family:'IBM Plex Mono',monospace;font-size:16px;color:var(--green-deep);}
+  .rec-badge{
+    display:inline-block;font-family:'IBM Plex Mono',monospace;font-size:9.5px;
+    background:var(--gold-pale);color:var(--green-deep);border-radius:4px;padding:1px 5px;margin-left:6px;
+  }
+  .data-star{color:var(--gold);font-size:10px;vertical-align:top;}
+
+  .blowup-box{
+    background:var(--red-pale);border-radius:8px;padding:10px 12px;margin-bottom:14px;
+  }
+  .blowup-box .field-label{color:var(--red);}
+  .course-diff-row{display:flex;gap:8px;margin-top:8px;}
+  .course-diff-row input{
+    flex:1;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.25);
+    border-radius:6px;color:var(--paper-raised);padding:6px 8px;font-size:12px;
+    font-family:'IBM Plex Mono',monospace;text-align:center;
+  }
+  .course-diff-row input::placeholder{color:rgba(251,249,242,0.5);}
+  .strokes-summary{
+    display:flex;justify-content:space-between;gap:6px;margin:0 20px 14px;
+  }
+  .ss-tile{
+    flex:1;text-align:center;background:var(--paper-raised);border:1px solid var(--line);
+    border-radius:8px;padding:8px 4px;
+  }
+  .ss-tile .ssn{font-family:'IBM Plex Mono',monospace;font-size:15px;font-weight:600;}
+  .ss-tile .ssl{font-size:9px;text-transform:uppercase;color:var(--ink-soft);letter-spacing:0.04em;}
+  .ss-pos{color:var(--green-deep);}
+  .ss-neg{color:var(--red);}
+</style>
+</head>
+<body>
+<div class="app" id="app"></div>
+
+<script>
+const CLUBS = ["Driver","Fairway Wood","Hybrid","Long Iron (3-5)","Mid Iron (6-7)","Short Iron (8-9)","Wedge"];
+const APPROACH_RANGES = ["<50","50-100","100-150","150-200","200+"];
+
+function blankHole(par){
+  return {
+    par: par||4, score: par||4, fir:null, approach:null, approachYards:null,
+    club:null, gir:null, ud:null, putts:2, puttDist:null,
+    blowup:null, recClub:null, recSwing:null, followedRec:null
+  };
+}
+function newRound(){
+  return {course:"", date: new Date().toISOString().slice(0,10), slope:"", rating:"", courseId:null, teeId:null, holes: Array.from({length:18},()=>blankHole(4))};
+}
+function blankCourseHoles(){
+  return Array.from({length:18},()=>({par:4, yardage:null}));
+}
+function approachBucketFromYards(y){
+  if(y==null || isNaN(y)) return null;
+  if(y<50) return "<50";
+  if(y<100) return "50-100";
+  if(y<150) return "100-150";
+  if(y<200) return "150-200";
+  return "200+";
+}
+
+// ---------- Bag & Caddie model ----------
+const SWINGS = [
+  {id:'half',  label:'½ swing',  short:'½',    mult:0.75, penalty:5, knock:0.35},
+  {id:'three', label:'¾ swing',  short:'¾',    mult:0.88, penalty:2, knock:0.65},
+  {id:'full',  label:'Full',     short:'Full', mult:1.00, penalty:0, knock:1.00},
+  {id:'extra', label:'Extra',    short:'Extra',mult:1.05, penalty:7, knock:1.15}
+];
+const CLUB_CATS = [
+  {id:'wood',   label:'Wood'},
+  {id:'hybrid', label:'Hybrid'},
+  {id:'iron',   label:'Iron'},
+  {id:'wedge',  label:'Wedge'}
+];
+const BAG_PRESET = [
+  {name:'Driver',        yards:250, cat:'wood'},
+  {name:'3 Hybrid',      yards:205, cat:'hybrid'},
+  {name:'4 Iron',        yards:194, cat:'iron'},
+  {name:'5 Iron',        yards:182, cat:'iron'},
+  {name:'6 Iron',        yards:171, cat:'iron'},
+  {name:'7 Iron',        yards:159, cat:'iron'},
+  {name:'8 Iron',        yards:147, cat:'iron'},
+  {name:'9 Iron',        yards:134, cat:'iron'},
+  {name:'Pitching Wedge',yards:122, cat:'wedge'},
+  {name:'Approach Wedge',yards:110, cat:'wedge'},
+  {name:'52° Wedge',     yards:98,  cat:'wedge'},
+  {name:'56° Wedge',     yards:86,  cat:'wedge'},
+  {name:'60° Wedge',     yards:74,  cat:'wedge'}
+];
+const LIES = [
+  {id:'fairway',   label:'Fairway',      mult:1.00, note:''},
+  {id:'tee',       label:'Tee',          mult:0.98, note:''},
+  {id:'lightrough',label:'Light rough',  mult:0.98, note:'Flier risk. Less spin means it can jump 5–10 yards and release hard on landing — take the shorter end of the range.'},
+  {id:'heavyrough',label:'Heavy rough',  mult:1.15, note:'Expect a knuckler with no spin. Steeper angle of attack, more club, and plan for it to run out.'},
+  {id:'bunker',    label:'Fairway bunker',mult:1.08,note:'Pick it clean, stay tall, feet dug in lightly. Take one more club and swing at 80% — contact matters more than power.'},
+  {id:'hardpan',   label:'Hardpan / bare',mult:1.02,note:'Ball comes out low and hot. Play it back, hands ahead, expect significant release.'},
+  {id:'straw',     label:'Straw / leaves',mult:1.04,note:'Ball can slip off the face. Hover the club, grip lighter, no digging.'}
+];
+const SLOPES = [
+  {id:'flat',    label:'Flat',           mult:1.00, note:''},
+  {id:'uphill',  label:'Uphill lie',     mult:1.06, note:'Adds loft and launch, costs distance. Ball tends to go left — aim right of target.'},
+  {id:'downhill',label:'Downhill lie',   mult:0.95, note:'De-lofts the club, lower flight and more roll. Ball tends to leak right — aim left.'},
+  {id:'above',   label:'Ball above feet',mult:1.02, note:'Flatter swing plane pulls the ball left. Choke down and aim right.'},
+  {id:'below',   label:'Ball below feet',mult:1.04, note:'More upright, ball fades right. Extra knee flex, stay down through it, aim left.'}
+];
+
+let bag = [];
+let inBagSetupWizard = false;
+let bagSetupStep = 'choice'; // 'choice' | 'editing'
+let shot = {target:150, elev:0, windDir:'none', windMph:0, lie:'fairway', slope:'flat', tempF:70, alt:900, trouble:'none', mustCarry:false};
+let newClubName = '', newClubYards = '', newClubCat = null;
+let practiceLog = []; // {id, date, focusKey, focusLabel, note}
+let focusExpanded = {}; // {key: bool}
+let cachedFocus = []; // computed candidates, refreshed on load/save
+let caddieOpenHole = null; // which hole index has the inline Get Club panel open
+
+// Learned yardage PER SWING TYPE: blends stock*swingMult (a prior worth ~3 shots)
+// with actual logged shots hit at that specific swing length. Falls back to the
+// full-swing learned number scaled by the swing multiplier when a swing bucket
+// has no data of its own yet.
+function effectiveYardageForSwing(club, swingId){
+  const sw = SWINGS.find(s=>s.id===swingId) || SWINGS.find(s=>s.id==='full');
+  const allShots = (club.shots||[]).filter(s => s.strike==='flush' || s.strike==='solid');
+  const bucketShots = allShots.filter(s => s.swing===swingId);
+  const PRIOR = 3;
+  if(bucketShots.length){
+    let num = club.yards*sw.mult*PRIOR, den = PRIOR;
+    const recent = bucketShots.slice(-15);
+    recent.forEach((s,i)=>{
+      const strikeW = s.strike==='flush' ? 1 : 0.4;
+      const recencyW = 0.5 + 0.5*((i+1)/recent.length);
+      const w = strikeW*recencyW;
+      num += s.neutral*w; den += w;
+    });
+    return num/den;
+  }
+  // No data for this swing bucket specifically — fall back to full-swing learned value, scaled.
+  return effectiveYardage(club) * sw.mult;
+}
+// Learned yardage: blends your entered stock number with real logged shots,
+// weighting recent + flush strikes highest. Stock acts as a prior worth ~4 shots.
+function effectiveYardage(club){
+  const shots = (club.shots||[]).filter(s => s.strike==='flush' || s.strike==='solid');
+  if(!shots.length) return club.yards;
+  const PRIOR = 4;
+  let num = club.yards * PRIOR, den = PRIOR;
+  const recent = shots.slice(-20);
+  recent.forEach((s,i)=>{
+    const strikeW = s.strike==='flush' ? 1 : 0.4;
+    const recencyW = 0.5 + 0.5*((i+1)/recent.length);
+    const w = strikeW * recencyW;
+    num += s.neutral * w; den += w;
+  });
+  return num/den;
+}
+function clubDispersion(club){
+  const shots = (club.shots||[]).filter(s => s.strike==='flush' || s.strike==='solid');
+  if(shots.length < 3) return null;
+  const v = shots.map(s=>s.neutral);
+  const mean = v.reduce((a,b)=>a+b,0)/v.length;
+  const sd = Math.sqrt(v.reduce((a,b)=>a+Math.pow(b-mean,2),0)/v.length);
+  return {sd, n:v.length};
+}
+// Chronic short/long bias vs. the number you were actually trying to hit
+function clubBias(club){
+  const shots = (club.shots||[]).filter(s => typeof s.target === 'number');
+  if(shots.length < 3) return null;
+  const diffs = shots.map(s => s.actual - s.target);
+  return {bias: diffs.reduce((a,b)=>a+b,0)/diffs.length, n:diffs.length};
+}
+// Average roll-out after landing, so we can estimate carry = neutral - roll
+function clubRoll(club){
+  const shots = (club.shots||[]).filter(s => typeof s.roll === 'number');
+  if(shots.length < 3) return null;
+  return {roll: shots.reduce((a,s)=>a+s.roll,0)/shots.length, n:shots.length};
+}
+// Miss-direction tendency: only counts shots where a direction other than 'center' was logged
+function clubDirectionBias(club){
+  const shots = (club.shots||[]).filter(s => s.direction);
+  if(shots.length < 5) return null;
+  const misses = shots.filter(s=>s.direction!=='center');
+  if(misses.length < 3) return {n:shots.length, dominant:null};
+  const left = misses.filter(s=>s.direction==='left').length;
+  const right = misses.filter(s=>s.direction==='right').length;
+  const dom = left>right ? 'left' : right>left ? 'right' : null;
+  const domPct = dom ? Math.round(Math.max(left,right)/misses.length*100) : 0;
+  return {n:shots.length, missN:misses.length, dominant: domPct>=60 ? dom : null, domPct};
+}
+// Compound pattern: a specific lie tends to produce a specific miss direction/short-long result
+function lieShotPattern(lieId){
+  let shots = [];
+  bag.forEach(c=>(c.shots||[]).forEach(s=>{ if(s.lie===lieId && s.direction) shots.push(s); }));
+  if(shots.length < 5) return null;
+  const misses = shots.filter(s=>s.direction!=='center');
+  if(misses.length < 4) return null;
+  const left = misses.filter(s=>s.direction==='left').length;
+  const right = misses.filter(s=>s.direction==='right').length;
+  const dom = left>right ? 'left' : right>left ? 'right' : null;
+  const domPct = dom ? Math.round(Math.max(left,right)/misses.length*100) : 0;
+  const shortCount = shots.filter(s=>typeof s.target==='number' && (s.actual-s.target) < -3).length;
+  const shortPct = Math.round(shortCount/shots.length*100);
+  return {n:shots.length, dominant: domPct>=60?dom:null, domPct, shortPct};
+}
+function allShotsCount(){
+  return bag.reduce((n,c)=>n+((c.shots||[]).length),0);
+}
+
+// Condition multiplier for a given swing's trajectory. Wind is the only component
+// that's trajectory-dependent — a knockdown ¾ swing flies lower and holds wind better,
+// so its wind term is attenuated by the swing's knockdown factor.
+function conditionMultiplier(s, swingId){
+  const sw = SWINGS.find(x=>x.id===swingId) || {knock:1};
+  const lie = LIES.find(l=>l.id===s.lie) || LIES[0];
+  const slope = SLOPES.find(l=>l.id===s.slope) || SLOPES[0];
+  let m = 1;
+  const knock = sw.knock!==undefined ? sw.knock : 1;
+  if(s.windDir==='head')      m *= (1 + 0.010*s.windMph*knock);
+  else if(s.windDir==='tail') m *= (1 - 0.005*s.windMph*knock);
+  else if(s.windDir==='cross')m *= (1 + 0.0015*s.windMph*knock);
+  m *= lie.mult;
+  m *= slope.mult;
+  m *= (1 + 0.0015*(70 - s.tempF));      // cold air = plays longer
+  m /= (1 + 0.02*(s.alt/1000));          // altitude = plays shorter
+  return m;
+}
+function computePlaysLike(s, swingId){
+  const elevYds = s.elev/3;              // ~1 yard per 3 feet
+  const m = conditionMultiplier(s, swingId||'full');
+  const pl = (s.target + elevYds) * m;
+  const parts = [];
+  if(Math.abs(elevYds) >= 1) parts.push(`${s.elev>0?'Uphill':'Downhill'} ${s.elev>0?'+':''}${Math.round(elevYds)}y`);
+  if(s.windDir!=='none' && s.windMph>0){
+    const sw = SWINGS.find(x=>x.id===(swingId||'full'));
+    const knock = sw ? sw.knock : 1;
+    const w = (s.windDir==='head' ? 0.010 : s.windDir==='tail' ? -0.005 : 0.0015) * knock;
+    parts.push(`${s.windDir==='head'?'Into':s.windDir==='tail'?'Down':'Cross'} ${s.windMph}mph ${w>0?'+':''}${Math.round(s.target*w*s.windMph)}y`);
+  }
+  const lie = LIES.find(l=>l.id===s.lie);
+  if(lie && lie.mult!==1) parts.push(`${lie.label} ${lie.mult>1?'+':''}${Math.round(s.target*(lie.mult-1))}y`);
+  const slope = SLOPES.find(l=>l.id===s.slope);
+  if(slope && slope.mult!==1) parts.push(`${slope.label} ${slope.mult>1?'+':''}${Math.round(s.target*(slope.mult-1))}y`);
+  if(s.tempF!==70) parts.push(`${s.tempF}°F ${s.tempF<70?'+':''}${Math.round(s.target*0.0015*(70-s.tempF))}y`);
+  if(s.alt>0) parts.push(`${s.alt}ft alt −${Math.round(s.target*0.02*(s.alt/1000))}y`);
+  return {playsLike: pl, parts};
+}
+
+function recommendClubs(shotState){
+  let opts = [];
+  bag.forEach(club=>{
+    SWINGS.forEach(sw=>{
+      // Half swings are a wedge shot. Three-quarters works for wedges and short irons.
+      // Nobody manufactures a half 5-iron, so don't offer one.
+      const stockEff = effectiveYardageForSwing(club, sw.id);
+      if(sw.id==='half'  && club.cat!=='wedge') return;
+      if(sw.id==='three' && !(club.cat==='wedge' || (club.cat==='iron' && stockEff <= 150))) return;
+      if(sw.id==='extra' && (club.cat==='wood' || club.cat==='hybrid')) return;
+
+      const y = stockEff;
+      const {playsLike} = computePlaysLike(shotState, sw.id);
+      const diff = y - playsLike;
+      let score = Math.abs(diff)*1.0 + sw.penalty;
+      const n = (club.shots||[]).length;
+      score += Math.max(0, 3-n) * 1.5;                          // trust well-tested clubs more
+      if(shotState.trouble!=='none' && sw.id==='extra') score += 6;  // no hero swings near trouble
+      const roll = clubRoll(club);
+      const carryY = roll ? y - roll.roll : null;
+      if(shotState.mustCarry && carryY!==null){
+        if(shotState.trouble==='short' && carryY < playsLike+2) score += 10;
+      } else {
+        if(shotState.trouble==='short' && diff < 2)  score += 10;
+        if(shotState.trouble==='long'  && diff > -2) score += 10;
+      }
+      opts.push({club, swing:sw, yards:y, diff, score, playsLike, carryY});
+    });
+  });
+  opts.sort((a,b)=>a.score-b.score);
+  const seen = new Set(); const out = [];
+  for(const o of opts){
+    if(seen.has(o.club.name)) continue;
+    seen.add(o.club.name); out.push(o);
+    if(out.length===3) break;
+  }
+  return out;
+}
+
+function gapAnalysis(){
+  const sorted = bag.map(c=>({name:c.name, y:effectiveYardage(c)})).sort((a,b)=>b.y-a.y);
+  const flags = [];
+  for(let i=0;i<sorted.length-1;i++){
+    const gap = sorted[i].y - sorted[i+1].y;
+    if(gap > 16) flags.push({type:'hole', text:`${Math.round(gap)}y gap between ${sorted[i].name} and ${sorted[i+1].name} — that's a yardage you can't cover with a full swing.`});
+    else if(gap < 6) flags.push({type:'dupe', text:`Only ${Math.round(gap)}y between ${sorted[i].name} and ${sorted[i+1].name} — those two clubs overlap.`});
+  }
+  return flags;
+}
+
+// ---------- Focus engine ----------
+const BENCH = { gir:44, putts:32, scrambling:50, threePutt:15, shortPutt:80 };
+let cachedFullRounds = [];
+
+function causeToDrill(cause){
+  switch(cause){
+    case 'penalty': return 'Before your next round, pick the 2 clubs you trust most off the tee on tight driving holes and commit to only those when trouble is in play.';
+    case 'shortgame': return 'Run the up-and-down circuit (9 balls: rough / bunker / tight lie, one shot each) twice this week.';
+    case 'threeputt': return 'Run the lag putting ladder (30/40/50ft, 5 balls each) twice this week.';
+    case 'teeshot': return 'Hit 10 tee shots with 3-wood or hybrid instead of driver and compare the dispersion — a lot of blow-ups start from trouble off the tee.';
+    default: return 'Watch for the pattern over your next few rounds — what specifically tends to repeat on these holes?';
+  }
+}
+const BLOWUP_LABELS = {penalty:'penalty/OB', shortgame:'a missed short-game shot', threeputt:'a 3-putt', teeshot:'a bad tee shot', other:'something else'};
+
+function domainsLinked(d1, d2){
+  if(d1.startsWith('clubBias:') || d1.startsWith('clubDirection:')){
+    const clubId = d1.split(':').slice(1).join(':');
+    const club = bag.find(c=>c.id===clubId);
+    if(!club) return false;
+    if(club.cat==='wedge' && (d2==='shortgame' || d2.startsWith('girBucket:<50') || d2.startsWith('girBucket:50-100'))) return true;
+    if(club.cat==='iron' && d2.startsWith('girBucket:')) return true;
+    return false;
+  }
+  if(d1.startsWith('lieDirection:')){
+    if(d2==='shortgame' || d2.startsWith('girBucket:')) return true;
+    return false;
+  }
+  return false;
+}
+
+function computeFocusCandidates(fullRounds){
+  const coldStart = history.length < 8;
+  let candidates = [];
+
+  let girByBucket = {}, girHitTotal=0, girAttemptsTotal=0;
+  let scrambleHit=0, scrambleAttempts=0;
+  let puttsIn10={made:0,total:0}, putts25={threePlus:0,total:0};
+  let blowupCounts = {}, blowupTotal = 0;
+  let parStats = {3:{n:0,sumToPar:0},4:{n:0,sumToPar:0},5:{n:0,sumToPar:0}};
+
+  fullRounds.forEach(r=>{
+    (r.holes||[]).forEach(h=>{
+      if(h.gir!==null){
+        girAttemptsTotal++;
+        if(h.gir==='hit') girHitTotal++;
+        if(h.approach){
+          girByBucket[h.approach] = girByBucket[h.approach]||{hit:0,total:0};
+          girByBucket[h.approach].total++;
+          if(h.gir==='hit') girByBucket[h.approach].hit++;
+        }
+        if(h.gir==='miss' && h.ud!==null){
+          scrambleAttempts++;
+          if(h.ud==='yes') scrambleHit++;
+        }
+      }
+      if(h.puttDist==='in10'){ puttsIn10.total++; if(h.putts===1) puttsIn10.made++; }
+      if(h.puttDist==='25plus'){ putts25.total++; if(h.putts>=3) putts25.threePlus++; }
+      if(h.blowup){ blowupTotal++; blowupCounts[h.blowup] = (blowupCounts[h.blowup]||0)+1; }
+      if(parStats[h.par]){ parStats[h.par].n++; parStats[h.par].sumToPar += (h.score-h.par); }
+    });
+  });
+
+  const girOverallPct = girAttemptsTotal? girHitTotal/girAttemptsTotal*100 : null;
+
+  Object.entries(girByBucket).forEach(([bucket,v])=>{
+    if(v.total<5) return;
+    const pct = v.hit/v.total*100;
+    const baseline = coldStart ? BENCH.gir : (girOverallPct!==null?girOverallPct:BENCH.gir);
+    const deficit = baseline - pct;
+    if(deficit>=12){
+      candidates.push({
+        key:`girBucket:${bucket}`, tier:'symptom', domain:`girBucket:${bucket}`,
+        severity: deficit*Math.sqrt(v.total), n:v.total,
+        line:`Approach shots from ${bucket}y are your weak spot — ${Math.round(pct)}% GIR vs ${coldStart?'the':'your own'} ${Math.round(baseline)}% ${coldStart?'benchmark':'average'}.`,
+        detail:`Over your last ${fullRounds.length} rounds, you've hit ${v.hit} of ${v.total} greens from ${bucket} yards (${Math.round(pct)}%) — below ${coldStart?'the 44% benchmark for breaking 80':'your own overall GIR rate of '+Math.round(baseline)+'%'}.`,
+        drillTitle:`Approach drill — ${bucket}y`,
+        drillBody:`Hit 10 balls from ${bucket} yards. Log the carry distance and miss direction for every one — no mulligans.`,
+        reassessLabel:`GIR% from ${bucket}y`
+      });
+    }
+  });
+
+  if(scrambleAttempts>=5){
+    const pct = scrambleHit/scrambleAttempts*100;
+    if(BENCH.scrambling - pct >= 12){
+      candidates.push({
+        key:'scrambling', tier:'symptom', domain:'shortgame',
+        severity:(BENCH.scrambling-pct)*Math.sqrt(scrambleAttempts), n:scrambleAttempts,
+        line:`Scrambling is costing you strokes — ${Math.round(pct)}% up-and-down vs a ${BENCH.scrambling}% target.`,
+        detail:`You've saved par ${scrambleHit} of ${scrambleAttempts} times you missed the green over your last ${fullRounds.length} rounds (${Math.round(pct)}%). Solid amateur scrambling sits closer to ${BENCH.scrambling}%.`,
+        drillTitle:'Up-and-down circuit',
+        drillBody:'9 balls around the practice green — 3 from light rough, 3 from a bunker, 3 from a tight fairway lie. One shot each. Count how many finish inside a 6-foot circle.',
+        reassessLabel:'Scrambling%'
+      });
+    }
+  }
+
+  if(putts25.total>=5){
+    const pct = putts25.threePlus/putts25.total*100;
+    if(pct - BENCH.threePutt >= 10){
+      candidates.push({
+        key:'threePutt', tier:'symptom', domain:'puttingLong',
+        severity:(pct-BENCH.threePutt)*Math.sqrt(putts25.total), n:putts25.total,
+        line:`Lag putting is leaking strokes — ${Math.round(pct)}% of your 25ft+ putts turn into 3-putts.`,
+        detail:`From 25+ feet, ${putts25.threePlus} of your last ${putts25.total} first putts led to a 3-putt (${Math.round(pct)}%) — above the ~${BENCH.threePutt}% you'd expect with decent speed control.`,
+        drillTitle:'Lag putting ladder',
+        drillBody:'Putt 5 balls from 30, 40, and 50 feet. Count how many finish inside a 3-foot circle. Aim for 4 of 5 at each distance.',
+        reassessLabel:'3-putt rate from 25+ feet'
+      });
+    }
+  }
+
+  if(puttsIn10.total>=5){
+    const pct = puttsIn10.made/puttsIn10.total*100;
+    if(BENCH.shortPutt - pct >= 15){
+      candidates.push({
+        key:'shortPutt', tier:'symptom', domain:'puttingShort',
+        severity:(BENCH.shortPutt-pct)*Math.sqrt(puttsIn10.total), n:puttsIn10.total,
+        line:`Short putts aren't dropping — ${Math.round(pct)}% made from inside 10 feet.`,
+        detail:`You've holed ${puttsIn10.made} of ${puttsIn10.total} first putts from inside 10 feet (${Math.round(pct)}%), below the ~${BENCH.shortPutt}% mark that separates rounds in the 70s.`,
+        drillTitle:'5-foot circuit',
+        drillBody:'Putt 10 straight 5-footers in a row. Track makes out of 10. Miss one — start the count back over from 0.',
+        reassessLabel:'Make rate from inside 10 feet'
+      });
+    }
+  }
+
+  if(blowupTotal>=3){
+    const worst = Object.entries(blowupCounts).sort((a,b)=>b[1]-a[1])[0];
+    const [cause,count] = worst;
+    const pct = count/blowupTotal*100;
+    if(pct>=40){
+      const causeLabel = BLOWUP_LABELS[cause]||cause;
+      candidates.push({
+        key:`blowup:${cause}`, tier:'symptom', domain:`blowup:${cause}`,
+        severity: pct*Math.sqrt(blowupTotal)*0.6, n:blowupTotal,
+        line:`Your blow-up holes have a pattern — ${causeLabel} is behind ${count} of your last ${blowupTotal}.`,
+        detail:`When you card a double-bogey or worse, it traces back to ${causeLabel} ${Math.round(pct)}% of the time over your last ${fullRounds.length} rounds.`,
+        drillTitle:`Blow-up prevention — ${causeLabel}`,
+        drillBody: causeToDrill(cause),
+        reassessLabel:`Frequency of "${causeLabel}" blow-up holes`
+      });
+    }
+  }
+
+  const parEntries = Object.entries(parStats).filter(([,v])=>v.n>=5);
+  if(parEntries.length>=2){
+    parEntries.forEach(([par,v])=>{
+      const others = parEntries.filter(([p])=>p!==par);
+      if(!others.length) return;
+      const othersAvg = others.reduce((a,[,ov])=>a+ov.sumToPar/ov.n,0)/others.length;
+      const thisAvg = v.sumToPar/v.n;
+      const gap = thisAvg - othersAvg;
+      if(gap>=0.35){
+        candidates.push({
+          key:`parSplit:${par}`, tier:'symptom', domain:`parSplit:${par}`,
+          severity: gap*10*Math.sqrt(v.n), n:v.n,
+          line:`Par ${par}s are quietly costing you shots — averaging ${thisAvg>=0?'+':''}${thisAvg.toFixed(1)} vs ${othersAvg>=0?'+':''}${othersAvg.toFixed(1)} elsewhere.`,
+          detail:`Across ${v.n} par-${par} holes in your last ${fullRounds.length} rounds, you're averaging ${thisAvg>=0?'+':''}${thisAvg.toFixed(1)} to par — about ${gap.toFixed(1)} strokes worse per hole than your other par types.`,
+          drillTitle:`Par ${par} focus`,
+          drillBody:`Track your next 5 par-${par} holes specifically — club and result off the tee, and where any miss happens. Look for one repeated mistake.`,
+          reassessLabel:`Avg score to par on Par ${par}s`
+        });
+      }
+    });
+  }
+
+  bag.forEach(c=>{
+    const b = clubBias(c);
+    if(b && b.n>=5 && Math.abs(b.bias)>=4){
+      candidates.push({
+        key:`clubBias:${c.id}`, tier:'root', domain:`clubBias:${c.id}`,
+        severity: Math.abs(b.bias)*Math.sqrt(b.n)*0.8, n:b.n,
+        line:`Your ${c.name} is running ${b.bias>0?'long':'short'} — averaging ${b.bias>0?'+':''}${b.bias.toFixed(1)}y vs. target.`,
+        detail:`Over ${b.n} logged shots, your ${c.name} has averaged ${b.bias>0?'+':''}${b.bias.toFixed(1)} yards vs. the number you aimed at. ${b.bias<0?'Chronically short — the stock number is optimistic.':'Consistently flying it past the target.'}`,
+        drillTitle:`${c.name} distance check`,
+        drillBody:`Hit 10 ${c.name} shots, flush strikes only. Log actual carry every time — no eyeballing it.`,
+        reassessLabel:`${c.name} distance bias`
+      });
+    }
+    const d = clubDirectionBias(c);
+    if(d && d.dominant){
+      candidates.push({
+        key:`clubDirection:${c.id}`, tier:'root', domain:`clubDirection:${c.id}`,
+        severity: d.domPct*Math.sqrt(d.missN)*0.5, n:d.missN,
+        line:`Your ${c.name} misses ${d.dominant} ${d.domPct}% of the time it misses.`,
+        detail:`Across ${d.n} logged ${c.name} shots, ${d.missN} were off-center, and ${d.domPct}% of those missed ${d.dominant}. Worth favoring the opposite side of the target until it's fixed.`,
+        drillTitle:`${c.name} start-line drill`,
+        drillBody:`Set two alignment sticks as a gate just outside the ball on your target line. Hit 10 balls with your ${c.name} — the ball has to start through the gate. Track how many still miss ${d.dominant}.`,
+        reassessLabel:`${c.name} miss direction`
+      });
+    }
+  });
+
+  LIES.forEach(lie=>{
+    const p = lieShotPattern(lie.id);
+    if(p && p.dominant){
+      const shortNote = p.shortPct>=50 ? ` and comes up short ${p.shortPct}% of the time` : '';
+      candidates.push({
+        key:`lieDirection:${lie.id}`, tier:'root', domain:`lieDirection:${lie.id}`,
+        severity: p.domPct*Math.sqrt(p.n)*0.55, n:p.n,
+        line:`Shots from ${lie.label.toLowerCase()} consistently miss ${p.dominant}${shortNote}.`,
+        detail:`Across ${p.n} logged shots from ${lie.label.toLowerCase()}, misses skew ${p.dominant} ${p.domPct}% of the time${shortNote}. Worth knowing before the shot, not just after.`,
+        drillTitle:`${lie.label} lie drill`,
+        drillBody:`Drop 9 balls in ${lie.label.toLowerCase()} — one swing each, log carry distance and direction. Compare the pattern to your fairway numbers with the same club.`,
+        reassessLabel:`${lie.label} miss tendency`
+      });
+    }
+  });
+
+  candidates.sort((a,b)=>b.severity-a.severity);
+  if(!candidates.length) return [];
+  // Root-cause candidates take priority over symptom candidates for the #1 slot,
+  // regardless of raw severity — that was the explicit call: fix the swing pattern
+  // before chasing the scoreboard number it produces.
+  const roots = candidates.filter(c=>c.tier==='root');
+  const symptoms = candidates.filter(c=>c.tier==='symptom');
+  const first = roots.length ? roots[0] : symptoms[0];
+  const picked = [first];
+  for(const c of candidates){
+    if(c===first) continue;
+    if(domainsLinked(first.domain, c.domain)) continue;
+    picked.push(c);
+    break;
+  }
+  return picked;
+}
+
+async function refreshFocus(){
+  const n = Math.min(history.length, 8);
+  const recentSummaries = history.slice(0, n);
+  const fullRounds = [];
+  for(const s of recentSummaries){
+    try{
+      const r = await window.storage.get('round:'+s.id);
+      if(r && r.value) fullRounds.push({...JSON.parse(r.value), id:s.id, date:s.date});
+    }catch(e){ /* round data missing, skip */ }
+  }
+  cachedFullRounds = fullRounds;
+  cachedFocus = computeFocusCandidates(fullRounds);
+}
+
+function computeMetricValue(key, roundsSubset){
+  if(key.startsWith('girBucket:')){
+    const bucket = key.split(':')[1];
+    let hit=0,total=0;
+    roundsSubset.forEach(r=>(r.holes||[]).forEach(h=>{ if(h.approach===bucket && h.gir!==null){ total++; if(h.gir==='hit') hit++; } }));
+    return total>=1 ? {value:hit/total*100,n:total} : null;
+  }
+  if(key==='scrambling'){
+    let hit=0,total=0;
+    roundsSubset.forEach(r=>(r.holes||[]).forEach(h=>{ if(h.gir==='miss' && h.ud!==null){ total++; if(h.ud==='yes') hit++; } }));
+    return total>=1?{value:hit/total*100,n:total}:null;
+  }
+  if(key==='threePutt'){
+    let tp=0,total=0;
+    roundsSubset.forEach(r=>(r.holes||[]).forEach(h=>{ if(h.puttDist==='25plus'){ total++; if(h.putts>=3) tp++; } }));
+    return total>=1?{value:tp/total*100,n:total}:null;
+  }
+  if(key==='shortPutt'){
+    let made=0,total=0;
+    roundsSubset.forEach(r=>(r.holes||[]).forEach(h=>{ if(h.puttDist==='in10'){ total++; if(h.putts===1) made++; } }));
+    return total>=1?{value:made/total*100,n:total}:null;
+  }
+  if(key.startsWith('blowup:')){
+    const cause = key.split(':')[1];
+    let count=0, totalBlow=0;
+    roundsSubset.forEach(r=>(r.holes||[]).forEach(h=>{ if(h.blowup){ totalBlow++; if(h.blowup===cause) count++; } }));
+    return totalBlow>=1?{value:count/totalBlow*100,n:totalBlow}:null;
+  }
+  if(key.startsWith('parSplit:')){
+    const par = Number(key.split(':')[1]);
+    let n=0,sum=0;
+    roundsSubset.forEach(r=>(r.holes||[]).forEach(h=>{ if(h.par===par){ n++; sum+=(h.score-h.par); } }));
+    return n>=1?{value:sum/n,n}:null;
+  }
+  return null;
+}
+function computeClubMetric(key, dateFilterFn){
+  if(key.startsWith('clubBias:')){
+    const clubId = key.split(':').slice(1).join(':');
+    const club = bag.find(c=>c.id===clubId);
+    if(!club) return null;
+    const shots = (club.shots||[]).filter(s=>typeof s.target==='number' && dateFilterFn(s.date));
+    if(!shots.length) return null;
+    const diffs = shots.map(s=>s.actual-s.target);
+    return {value: diffs.reduce((a,b)=>a+b,0)/diffs.length, n:shots.length};
+  }
+  if(key.startsWith('clubDirection:') || key.startsWith('lieDirection:')){
+    let shots=[];
+    if(key.startsWith('clubDirection:')){
+      const clubId = key.split(':').slice(1).join(':');
+      const club = bag.find(c=>c.id===clubId);
+      if(club) shots = (club.shots||[]).filter(s=>s.direction && dateFilterFn(s.date));
+    } else {
+      const lieId = key.split(':')[1];
+      bag.forEach(c=>(c.shots||[]).forEach(s=>{ if(s.lie===lieId && s.direction && dateFilterFn(s.date)) shots.push(s); }));
+    }
+    if(!shots.length) return null;
+    const misses = shots.filter(s=>s.direction!=='center');
+    return {value: misses.length/shots.length*100, n:shots.length};
+  }
+  return null;
+}
+function beforeAfterFor(key){
+  const entries = practiceLog.filter(p=>p.focusKey===key);
+  if(!entries.length) return null;
+  const firstDate = entries.map(e=>e.date).sort()[0];
+  const isClubLevel = key.startsWith('clubBias:') || key.startsWith('clubDirection:') || key.startsWith('lieDirection:');
+  if(isClubLevel){
+    return {before: computeClubMetric(key, d=>d<firstDate), after: computeClubMetric(key, d=>d>=firstDate), firstDate};
+  }
+  const beforeRounds = cachedFullRounds.filter(r=>r.date<firstDate);
+  const afterRounds = cachedFullRounds.filter(r=>r.date>=firstDate);
+  return {before: computeMetricValue(key, beforeRounds), after: computeMetricValue(key, afterRounds), firstDate};
+}
+async function logPracticeEntry(focusKey, focusLabel, note){
+  practiceLog.unshift({id:Date.now().toString(), date:new Date().toISOString().slice(0,10), focusKey, focusLabel, note: note||''});
+  await savePracticeLog();
+}
+
+let round = newRound();
+let currentHole = 0;
+let activeTab = 'home';
+let roundInProgress = false;
+let history = []; // {id, course, date, score, toPar, girPct, puttsAvg, holes}
+let courses = []; // courses-index summaries: {id, name, teeLabels}
+let courseEditor = null; // null | {id, name, tees:[{id,label,holes:[{par,yardage}]x18}]}
+let roundStartStep = null; // null | 'selectCourse' — shown before hole 1 of a new round
+
+const app = document.getElementById('app');
+
+// ---------- IndexedDB-backed storage (matches the artifact window.storage shape) ----------
+const DB_NAME = 'round-log-db', DB_VERSION = 1, STORE_NAME = 'kv';
+let _dbPromise = null;
+function openDB(){
+  if(_dbPromise) return _dbPromise;
+  _dbPromise = new Promise((resolve, reject)=>{
+    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    req.onupgradeneeded = ()=>{ req.result.createObjectStore(STORE_NAME, {keyPath:'key'}); };
+    req.onsuccess = ()=> resolve(req.result);
+    req.onerror = ()=> reject(req.error);
+  });
+  return _dbPromise;
+}
+window.storage = {
+  async get(key){
+    const db = await openDB();
+    return new Promise((resolve, reject)=>{
+      const req = db.transaction(STORE_NAME, 'readonly').objectStore(STORE_NAME).get(key);
+      req.onsuccess = ()=> resolve(req.result ? {key: req.result.key, value: req.result.value} : null);
+      req.onerror = ()=> reject(req.error);
+    });
+  },
+  async set(key, value){
+    const db = await openDB();
+    return new Promise((resolve, reject)=>{
+      const req = db.transaction(STORE_NAME, 'readwrite').objectStore(STORE_NAME).put({key, value});
+      req.onsuccess = ()=> resolve();
+      req.onerror = ()=> reject(req.error);
+    });
+  },
+  async delete(key){
+    const db = await openDB();
+    return new Promise((resolve, reject)=>{
+      const req = db.transaction(STORE_NAME, 'readwrite').objectStore(STORE_NAME).delete(key);
+      req.onsuccess = ()=> resolve();
+      req.onerror = ()=> reject(req.error);
+    });
+  },
+  async list(prefix){
+    const db = await openDB();
+    return new Promise((resolve, reject)=>{
+      const results = [];
+      const req = db.transaction(STORE_NAME, 'readonly').objectStore(STORE_NAME).openCursor();
+      req.onsuccess = e=>{
+        const cursor = e.target.result;
+        if(cursor){
+          if(!prefix || cursor.value.key.startsWith(prefix)) results.push({key: cursor.value.key, value: cursor.value.value});
+          cursor.continue();
+        } else resolve(results);
+      };
+      req.onerror = ()=> reject(req.error);
+    });
+  }
+};
+
+// ---------- Storage ----------
+async function loadHistory(){
+  try{
+    const idxRes = await window.storage.get('rounds-index');
+    if(idxRes && idxRes.value){
+      history = JSON.parse(idxRes.value);
+    }
+  }catch(e){ history = []; }
+  try{
+    const bagRes = await window.storage.get('bag');
+    if(bagRes && bagRes.value){
+      bag = JSON.parse(bagRes.value);
+    } else {
+      bag = [];
+      inBagSetupWizard = true;
+      bagSetupStep = 'choice';
+    }
+  }catch(e){
+    bag = [];
+    inBagSetupWizard = true;
+    bagSetupStep = 'choice';
+  }
+  try{
+    const setRes = await window.storage.get('caddie-settings');
+    if(setRes && setRes.value){ shot = {...shot, ...JSON.parse(setRes.value)}; }
+  }catch(e){ /* first run */ }
+  try{
+    const pRes = await window.storage.get('practice-log');
+    practiceLog = (pRes && pRes.value) ? JSON.parse(pRes.value) : [];
+  }catch(e){ practiceLog = []; }
+  try{
+    const cRes = await window.storage.get('courses-index');
+    courses = (cRes && cRes.value) ? JSON.parse(cRes.value) : [];
+  }catch(e){ courses = []; }
+  render();
+  await refreshFocus();
+  render();
+}
+async function savePracticeLog(){
+  try{ await window.storage.set('practice-log', JSON.stringify(practiceLog)); }
+  catch(e){ console.error('practice log save failed', e); }
+}
+async function saveBag(){
+  try{ await window.storage.set('bag', JSON.stringify(bag)); }
+  catch(e){ console.error('bag save failed', e); }
+}
+async function saveSettings(){
+  try{ await window.storage.set('caddie-settings', JSON.stringify({tempF:shot.tempF, alt:shot.alt})); }
+  catch(e){ /* non-critical */ }
+}
+async function saveRoundToStorage(summary, fullRound){
+  try{
+    await window.storage.set('round:'+summary.id, JSON.stringify(fullRound));
+    history.unshift(summary);
+    await window.storage.set('rounds-index', JSON.stringify(history));
+  }catch(e){ console.error('save failed', e); }
+}
+async function deleteRound(id){
+  if(!confirm('Delete this round? This can\'t be undone.')) return;
+  try{
+    await window.storage.delete('round:'+id);
+  }catch(e){ /* key may already be gone, fine */ }
+  history = history.filter(h=>h.id!==id);
+  try{
+    await window.storage.set('rounds-index', JSON.stringify(history));
+  }catch(e){ console.error('index update failed', e); }
+  render();
+}
+async function saveCourseToStorage(fullCourse){
+  const summary = {id: fullCourse.id, name: fullCourse.name, teeLabels: fullCourse.tees.map(t=>t.label)};
+  try{
+    await window.storage.set('course:'+fullCourse.id, JSON.stringify(fullCourse));
+    courses = courses.filter(c=>c.id!==fullCourse.id);
+    courses.unshift(summary);
+    await window.storage.set('courses-index', JSON.stringify(courses));
+  }catch(e){ console.error('course save failed', e); }
+}
+async function deleteCourse(id){
+  if(!confirm('Delete this course? Saved rounds that reference it are unaffected.')) return;
+  try{
+    await window.storage.delete('course:'+id);
+  }catch(e){ /* key may already be gone, fine */ }
+  courses = courses.filter(c=>c.id!==id);
+  try{
+    await window.storage.set('courses-index', JSON.stringify(courses));
+  }catch(e){ console.error('index update failed', e); }
+  render();
+}
+function careerStats(hist){
+  if(hist.length===0) return null;
+  const scores = hist.map(h=>h.score);
+  const girs = hist.map(h=>h.girPct);
+  const putts = hist.map(h=>h.puttsAvg*18);
+  const toPars = hist.map(h=>h.toPar);
+  const avg = arr => arr.reduce((a,b)=>a+b,0)/arr.length;
+  return {
+    rounds: hist.length,
+    best: Math.min(...scores),
+    bestToPar: toPars[scores.indexOf(Math.min(...scores))],
+    avgScore: avg(scores),
+    avgGir: Math.round(avg(girs)),
+    avgPutts: avg(putts)
+  };
+}
+
+// ---------- Stat computation ----------
+function computeStats(r){
+  let totalScore=0, totalPar=0, girHit=0, girAttempts=0, firHit=0, firAttempts=0;
+  let putts=0, udHit=0, udAttempts=0;
+  let scoreOnGirHit=[], scoreOnGirMiss=[];
+  r.holes.forEach(h=>{
+    totalScore += Number(h.score)||0;
+    totalPar += Number(h.par)||0;
+    if(h.gir!==null){
+      girAttempts++;
+      if(h.gir==='hit'){ girHit++; scoreOnGirHit.push(h.score-h.par); }
+      else { scoreOnGirMiss.push(h.score-h.par); if(h.ud!==null){ udAttempts++; if(h.ud==='yes') udHit++; } }
+    }
+    if(h.par!==3 && h.fir!==null){ firAttempts++; if(h.fir==='hit') firHit++; }
+    putts += Number(h.putts)||0;
+  });
+  const avg = arr => arr.length? (arr.reduce((a,b)=>a+b,0)/arr.length) : null;
+  return {
+    totalScore, totalPar, toPar: totalScore-totalPar,
+    girHit, girAttempts, girPct: girAttempts? Math.round(girHit/girAttempts*100):0,
+    firHit, firAttempts, firPct: firAttempts? Math.round(firHit/firAttempts*100):0,
+    putts, puttsAvg: (putts/18),
+    udHit, udAttempts, udPct: udAttempts? Math.round(udHit/udAttempts*100):0,
+    avgOnGirHit: avg(scoreOnGirHit), avgOnGirMiss: avg(scoreOnGirMiss)
+  };
+}
+
+// Rough, heuristic "where did the strokes go" split — not a rigorous strokes-gained
+// model (that needs distance-based PGA baseline tables), just a proportional estimate
+// against the same benchmarks used elsewhere, so it's directionally honest, not exact.
+function computeStrokesSummary(stats){
+  const driving = stats.firAttempts>=3 ? (stats.firPct-60)/100*stats.firAttempts*0.25 : 0;
+  const approach = stats.girAttempts>=3 ? (stats.girPct-BENCH.gir)/100*18*0.45 : 0;
+  const missedGir = stats.girAttempts - stats.girHit;
+  const shortGame = missedGir>0 ? (stats.udPct-BENCH.scrambling)/100*missedGir*0.9 : 0;
+  const putting = stats.putts>0 ? (BENCH.putts - stats.putts)*0.85 : 0;
+  return {driving, approach, shortGame, putting};
+}
+
+function scoreShapeClass(score, par){
+  const diff = score - par;
+  if(diff<=-2) return 'shape-eagle';
+  if(diff===-1) return 'shape-birdie';
+  if(diff===0) return 'shape-par';
+  if(diff===1) return 'shape-bogey';
+  return 'shape-double';
+}
+function scoreCaption(score,par){
+  const diff=score-par;
+  if(diff<=-2) return 'Eagle or better';
+  if(diff===-1) return 'Birdie';
+  if(diff===0) return 'Par';
+  if(diff===1) return 'Bogey';
+  return diff===2? 'Double bogey' : diff+' over par';
+}
+
+// ---------- Insights ----------
+function buildInsights(r, stats, hist){
+  const holesEntered = r.holes.filter(h=>h.gir!==null).length;
+  if(holesEntered < 3){
+    return null;
+  }
+  const insights = [];
+
+  // GIR vs break-80 benchmark
+  const girTarget = 8;
+  if(stats.girAttempts>0){
+    if(stats.girHit < girTarget){
+      insights.push(`You've hit <b>${stats.girHit} of ${stats.girAttempts}</b> greens so far (${stats.girPct}%). Rounds in the 70s tend to average around <b>8 of 18</b> — you need roughly ${Math.max(girTarget-stats.girHit,0)} more today to hit that pace.`);
+    } else {
+      insights.push(`You're at <b>${stats.girHit} of ${stats.girAttempts}</b> greens (${stats.girPct}%) — right in the range that supports scores in the 70s. Keep feeding approach shots.`);
+    }
+  }
+
+  // Putts benchmark
+  if(stats.putts>0){
+    const projected = Math.round(stats.puttsAvg*18);
+    if(projected>32){
+      insights.push(`You're averaging <b>${stats.puttsAvg.toFixed(1)} putts/hole</b>, projecting to about <b>${projected} for 18</b>. Breaking 80 usually means getting closer to <b>31-32 total putts</b>.`);
+    } else {
+      insights.push(`Your putting pace (<b>~${projected} for 18</b>) is already inside the range that supports low-80s/70s scoring.`);
+    }
+  }
+
+  // The correlation the user is looking for: GIR vs actual scoring result
+  if(stats.avgOnGirHit!==null && stats.avgOnGirMiss!==null){
+    const gap = (stats.avgOnGirMiss - stats.avgOnGirHit);
+    insights.push(`Here's the correlation: when you hit the green, you're averaging <b>${stats.avgOnGirHit>=0?'+':''}${stats.avgOnGirHit.toFixed(1)} to par</b> on that hole. When you miss it, you're averaging <b>${stats.avgOnGirMiss>=0?'+':''}${stats.avgOnGirMiss.toFixed(1)} to par</b> — a <b>${gap.toFixed(1)}-stroke gap</b>. That gap is your scrambling tax.`);
+  }
+
+  // Scrambling
+  if(stats.udAttempts>=2){
+    insights.push(`Scrambling: you've saved par <b>${stats.udHit} of ${stats.udAttempts}</b> times you missed the green (${stats.udPct}%). Tour average is around 50-60%.`);
+  }
+
+  // FIR correlation to GIR
+  if(stats.firAttempts>=3){
+    const firHoles = r.holes.filter(h=>h.par!==3 && h.fir!==null);
+    const hitFir = firHoles.filter(h=>h.fir==='hit');
+    const missFir = firHoles.filter(h=>h.fir==='miss');
+    const girRate = arr => arr.length? Math.round(arr.filter(h=>h.gir==='hit').length/arr.length*100):null;
+    const g1=girRate(hitFir), g2=girRate(missFir);
+    if(g1!==null && g2!==null){
+      insights.push(`When you find the fairway, your GIR rate is <b>${g1}%</b>. When you miss it, that drops to <b>${g2}%</b>. ${g1-g2>=15?'Driving accuracy is clearly feeding your approach game today.':'The gap is smaller than most golfers assume — your irons may matter more than the driver right now.'}`);
+    }
+  }
+
+  // Approach distance pattern
+  const distBuckets = {};
+  r.holes.forEach(h=>{
+    if(h.approach && h.gir!==null){
+      distBuckets[h.approach] = distBuckets[h.approach]||{hit:0,total:0};
+      distBuckets[h.approach].total++;
+      if(h.gir==='hit') distBuckets[h.approach].hit++;
+    }
+  });
+  const bucketEntries = Object.entries(distBuckets).filter(([,v])=>v.total>=2);
+  if(bucketEntries.length){
+    let worst = bucketEntries.reduce((a,b)=> (a[1].hit/a[1].total) < (b[1].hit/b[1].total) ? a : b);
+    const pct = Math.round(worst[1].hit/worst[1].total*100);
+    if(pct<50){
+      insights.push(`Your weakest approach range today is <b>${worst[0]} yards</b> — only ${pct}% GIR from there. That's worth range time this week.`);
+    }
+  }
+
+  // Cross-round trend
+  if(hist.length>=2){
+    const recent = hist.slice(0,3);
+    const girTrend = recent.map(x=>x.girPct);
+    const puttsTrend = recent.map(x=>x.puttsAvg);
+    if(girTrend.length>=2){
+      const delta = girTrend[0]-girTrend[girTrend.length-1];
+      insights.push(`Across your last ${girTrend.length} saved rounds, GIR% has ${delta>0?'improved':delta<0?'dropped':'held steady'} (${girTrend.slice().reverse().join('% → ')}%).`);
+    }
+  }
+
+  return insights;
+}
+
+// ---------- Rendering ----------
+function render(){
+  if(inBagSetupWizard){
+    app.innerHTML = renderBagSetupView();
+    attachHandlers();
+    return;
+  }
+  const stats = computeStats(round);
+  app.innerHTML = `
+    <header class="mast">
+      <div class="eyebrow">Round Log</div>
+      <h1>One round, every stroke.</h1>
+      <div class="mast-row">
+        <input class="mast-input" id="courseInput" placeholder="Course name" value="${escapeHtml(round.course)}">
+        <input class="mast-input" id="dateInput" type="date" value="${round.date}">
+      </div>
+      <div class="course-diff-row">
+        <input id="slopeInput" type="number" inputmode="numeric" placeholder="Slope (optional)" value="${escapeHtml(round.slope)}">
+        <input id="ratingInput" type="number" inputmode="decimal" placeholder="Rating (optional)" value="${escapeHtml(round.rating)}">
+      </div>
+    </header>
+    <nav class="tabs">
+      <button data-tab="home" class="${activeTab==='home'?'active':''}">Home</button>
+      <button data-tab="caddie" class="${activeTab==='caddie'?'active':''}">Caddie</button>
+      <button data-tab="bag" class="${activeTab==='bag'?'active':''}">Bag</button>
+      <button data-tab="courses" class="${activeTab==='courses'?'active':''}">Courses</button>
+      <button data-tab="round" class="${activeTab==='round'?'active':''}">${roundInProgress?'Round•':'Round'}</button>
+      <button data-tab="history" class="${activeTab==='history'?'active':''}">Past</button>
+    </nav>
+    ${activeTab==='home' ? renderHomeView()
+      : activeTab==='caddie' ? renderCaddieView()
+      : activeTab==='bag' ? renderBagView()
+      : activeTab==='courses' ? renderCoursesView()
+      : activeTab==='round' ? (roundStartStep==='selectCourse' ? renderRoundStartView() : renderRoundView(stats))
+      : renderHistoryView()}
+  `;
+  attachHandlers();
+}
+
+// ---------- My Bag ----------
+function renderClubRows(){
+  const sorted = [...bag].sort((a,b)=>effectiveYardage(b)-effectiveYardage(a));
+  return sorted.map(c=>{
+    const eff = effectiveYardage(c);
+    const disp = clubDispersion(c);
+    const drift = eff - c.yards;
+    return `
+    <div class="bag-row">
+      <div class="bn">${escapeHtml(c.name)}</div>
+      <input class="by" type="number" inputmode="numeric" data-clubyards="${escapeHtml(c.id)}" value="${c.yards}">
+      <div class="beff">
+        ${(c.shots||[]).length ? `${Math.round(eff)}y real<br>${Math.abs(drift)>=2?`${drift>0?'+':''}${Math.round(drift)} drift`:'on stock'}${disp?`<br>±${Math.round(disp.sd)}`:''}` : `<span style="color:var(--line-strong)">no data</span>`}
+      </div>
+      <button class="brm" data-removeclub="${escapeHtml(c.id)}">&times;</button>
+    </div>`;
+  }).join('');
+}
+function renderAddClubForm(){
+  return `
+    <div class="bag-add">
+      <input id="newClubName" placeholder="Club name" value="${escapeHtml(newClubName)}">
+      <input id="newClubYards" class="num" type="number" inputmode="numeric" placeholder="Yds" value="${escapeHtml(String(newClubYards))}">
+    </div>
+    <div class="field" style="margin-top:8px;">
+      <span class="field-label">Category</span>
+      <div class="btn-row" id="newClubCatRow" style="gap:6px;">
+        ${CLUB_CATS.map(cc=>`<button data-newclubcat="${cc.id}" class="${newClubCat===cc.id?'sel':''}" style="flex:0 0 auto;padding:8px 10px;font-size:12px;">${cc.label}</button>`).join('')}
+      </div>
+    </div>
+    <button class="save-btn" id="addClubBtn" style="margin-top:8px;">Add Club</button>
+  `;
+}
+function wireClubListHandlers(){
+  document.querySelectorAll('[data-clubyards]').forEach(inp=>inp.onchange = async ()=>{
+    const c = bag.find(x=>x.id===inp.dataset.clubyards);
+    if(c){ c.yards = Number(inp.value)||c.yards; await saveBag(); render(); }
+  });
+  document.querySelectorAll('[data-removeclub]').forEach(b=>b.onclick = async ()=>{
+    const c = bag.find(x=>x.id===b.dataset.removeclub);
+    if(c && confirm(`Remove ${c.name} from your bag?`)){
+      bag = bag.filter(x=>x.id!==b.dataset.removeclub);
+      await saveBag(); await refreshFocus(); render();
+    }
+  });
+  const nn = document.getElementById('newClubName');
+  if(nn) nn.oninput = e => newClubName = e.target.value;
+  const ny = document.getElementById('newClubYards');
+  if(ny) ny.oninput = e => newClubYards = e.target.value;
+  document.querySelectorAll('[data-newclubcat]').forEach(b=>b.onclick = ()=>{
+    newClubCat = b.dataset.newclubcat; render();
+  });
+  const addBtn = document.getElementById('addClubBtn');
+  if(addBtn) addBtn.onclick = async ()=>{
+    if(!newClubName.trim() || !Number(newClubYards) || !newClubCat) return;
+    const nm = newClubName.trim();
+    bag.push({id: nm+'-'+Date.now(), name:nm, yards:Number(newClubYards), cat:newClubCat, shots:[]});
+    newClubName=''; newClubYards=''; newClubCat=null;
+    await saveBag(); render();
+  };
+}
+
+// ---------- Bag Setup wizard (first run, or after Clear & Rebuild) ----------
+function renderBagSetupView(){
+  if(bagSetupStep==='choice'){
+    return `
+      <header class="mast">
+        <div class="eyebrow">Round Log</div>
+        <h1>Set Up Your Bag</h1>
+      </header>
+      <section>
+        <div class="na-note" style="padding:0 0 14px;">Your bag drives every yardage in Caddie and the learned-distance system in Bag. Pick a starting point — you can edit anything after.</div>
+        <button class="action-card" id="setupQuickStart">
+          <div><div class="ac-title">Quick Start</div>
+          <div class="ac-sub">Prefill a standard 13-club bag, editable before you're done</div></div>
+          <div class="ac-arrow">&#8594;</div>
+        </button>
+        <button class="action-card secondary" id="setupBuildOwn">
+          <div><div class="ac-title">Build My Own</div>
+          <div class="ac-sub">Start empty, add clubs one at a time</div></div>
+          <div class="ac-arrow">&#8594;</div>
+        </button>
+      </section>
+    `;
+  }
+  return `
+    <header class="mast">
+      <div class="eyebrow">Round Log</div>
+      <h1>Your Bag</h1>
+    </header>
+    <div class="home-section-title">Clubs</div>
+    <section style="padding-top:4px;">
+      ${renderClubRows()}
+      ${renderAddClubForm()}
+      <button class="finish-btn" id="finishBagSetup">Finish Setup</button>
+    </section>
+  `;
+}
+
+function renderBagView(){
+  const flags = gapAnalysis();
+  const sorted = [...bag].sort((a,b)=>effectiveYardage(b)-effectiveYardage(a));
+  const wedges = sorted.filter(c=>c.cat==='wedge' || c.cat==='iron').slice(-6);
+  const shotCount = allShotsCount();
+  return `
+    <div class="home-section-title">Your Clubs — stock yardage, and what the data says</div>
+    <section style="padding-top:4px;">
+      ${renderClubRows()}
+      ${renderAddClubForm()}
+      <div class="na-note">Yellow column is your <b>learned</b> yardage — it blends the number you typed with every shot you've logged, weighting recent and flush strikes highest. Drift shows how far reality has moved from your original guess.</div>
+    </section>
+
+    <div class="home-section-title">Gapping Check</div>
+    <section style="padding-top:2px;">
+      ${flags.length
+        ? flags.map(f=>`<div class="gap-flag">${f.text}</div>`).join('')
+        : `<div class="gap-flag ok">Your gaps are even top to bottom — no dead yardages and no redundant clubs.</div>`}
+    </section>
+
+    <div class="home-section-title">Partial Swing Matrix — learned per swing, not just multiplied</div>
+    <div class="ledger-wrap">
+      <table class="matrix">
+        <thead><tr><th style="text-align:left;">Club</th><th>½</th><th>¾</th><th>Full</th><th>Extra</th></tr></thead>
+        <tbody>
+          ${wedges.map(c=>{
+            return `<tr>
+              <td class="cname">${escapeHtml(c.name)}</td>
+              ${SWINGS.map(s=>{
+                const hasData = (c.shots||[]).some(sh=>sh.swing===s.id && (sh.strike==='flush'||sh.strike==='solid'));
+                const y = effectiveYardageForSwing(c, s.id);
+                return `<td${s.id==='full'?' style="font-weight:600;color:var(--green-deep)"':''}>${Math.round(y)}${hasData?'<span class="data-star">●</span>':''}</td>`;
+              }).join('')}
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+      <div class="na-note">● marks a swing length you've actually logged shots for — those numbers are real, not just multiplied from your full-swing yardage. Memorize the ¾ column for your wedges and you stop having to manufacture half-shots on the fly.</div>
+    </div>
+
+    <div class="home-section-title">Calibration Status</div>
+    <section style="padding-top:2px;">
+      <div class="insights-panel" style="margin:0;">
+        ${shotCount===0
+          ? `<div class="empty">No shots logged yet. Log a few from the Caddie tab and these numbers start correcting themselves.</div>`
+          : `<ul>
+              <li><b>${shotCount}</b> shot${shotCount===1?'':'s'} logged across ${bag.filter(c=>(c.shots||[]).length).length} club${bag.filter(c=>(c.shots||[]).length).length===1?'':'s'}.</li>
+              ${bag.filter(c=>clubBias(c)).map(c=>{
+                const b = clubBias(c);
+                return `<li><b>${escapeHtml(c.name)}</b>: averaging <b>${b.bias>0?'+':''}${b.bias.toFixed(1)} yards</b> vs. the number you aimed at over ${b.n} shots. ${b.bias < -4 ? 'You are chronically short with this club — the stock number is optimistic.' : b.bias > 4 ? 'You are consistently flying this one past the target.' : 'Well calibrated.'}</li>`;
+              }).join('')}
+              ${bag.filter(c=>clubDirectionBias(c) && clubDirectionBias(c).dominant).map(c=>{
+                const d = clubDirectionBias(c);
+                return `<li><b>${escapeHtml(c.name)}</b>: misses <b>${d.dominant}</b> ${d.domPct}% of the time it misses (${d.n} shots logged).</li>`;
+              }).join('')}
+              ${bag.filter(c=>clubRoll(c)).map(c=>{
+                const r = clubRoll(c);
+                const eff = effectiveYardage(c);
+                return `<li><b>${escapeHtml(c.name)}</b>: averaging <b>${Math.round(r.roll)}y of roll</b> after landing — estimated carry ~${Math.round(eff-r.roll)}y vs. total ~${Math.round(eff)}y.</li>`;
+              }).join('')}
+            </ul>`}
+      </div>
+      <button class="save-btn" id="resetBagBtn" style="background:var(--paper-raised);color:var(--red);border:1px solid var(--line-strong);margin-top:12px;">Clear &amp; Rebuild Bag</button>
+    </section>
+  `;
+}
+
+// ---------- Course Library ----------
+function renderCoursesView(){
+  if(courseEditor) return renderCourseEditorView();
+  return `
+    <div class="home-section-title">Saved Courses</div>
+    <section style="padding-top:4px;">
+      ${courses.length===0
+        ? `<div class="empty-state" style="padding:24px 0;"><b>No courses saved yet</b>Save a course to pre-fill par (and optionally yardage) the next time you start a round there.</div>`
+        : courses.map(c=>`
+        <div class="round-card">
+          <div class="rc-left">
+            <div class="rc-course">${escapeHtml(c.name)}</div>
+            <div class="rc-date">${c.teeLabels.filter(Boolean).length ? c.teeLabels.filter(Boolean).join(', ') : `${c.teeLabels.length} tee set${c.teeLabels.length===1?'':'s'}`}</div>
+          </div>
+          <div class="rc-right">
+            <button class="rc-del" data-editcourse="${c.id}" style="color:var(--green-mid);">Edit</button>
+            <button class="rc-del" data-delcourse="${c.id}">Delete</button>
+          </div>
+        </div>
+      `).join('')}
+    </section>
+    <button class="action-card" id="addCourseBtn">
+      <div><div class="ac-title">Add Course</div>
+      <div class="ac-sub">Par per hole, per tee set — yardage optional</div></div>
+      <div class="ac-arrow">&#8594;</div>
+    </button>
+  `;
+}
+function renderTeeHolesTable(ti, holes, start, end, label){
+  return `
+    <div class="na-note" style="padding:6px 0 4px;font-style:normal;font-weight:600;color:var(--ink);">${label}</div>
+    <table class="ledger">
+      <thead><tr><th>Hole</th><th>Par</th><th>Yardage</th></tr></thead>
+      <tbody>
+        ${holes.slice(start,end).map((h,offset)=>{
+          const hi = start+offset;
+          return `<tr>
+            <td>${hi+1}</td>
+            <td>
+              <select class="field-select" style="padding:4px;font-size:12px;width:56px;" data-holepar="${ti}:${hi}">
+                ${[3,4,5].map(p=>`<option value="${p}" ${h.par===p?'selected':''}>${p}</option>`).join('')}
+              </select>
+            </td>
+            <td><input class="mini-input" style="width:74px;" type="number" inputmode="numeric" placeholder="optional" data-holeyardage="${ti}:${hi}" value="${h.yardage!=null?h.yardage:''}"></td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>
+  `;
+}
+function renderCourseEditorView(){
+  const e = courseEditor;
+  return `
+    <div class="home-section-title">${e.id ? 'Edit Course' : 'Add Course'}</div>
+    <section style="padding-top:4px;">
+      <div class="field">
+        <span class="field-label">Course Name</span>
+        <input class="mini-input" style="text-align:left;padding-left:12px;" id="courseEditorName" placeholder="e.g. Pebble Beach" value="${escapeHtml(e.name)}">
+      </div>
+
+      ${e.tees.map((t,ti)=>`
+        <div class="focus-card" style="margin:0 0 14px;">
+          <div class="fc-head" style="cursor:default;">
+            <input class="mini-input" style="flex:1;text-align:left;padding-left:10px;" placeholder="Tee name (e.g. Blue, Forward)" data-teelabel="${ti}" value="${escapeHtml(t.label)}">
+            ${e.tees.length>1 ? `<button class="rc-del" data-removetee="${ti}">Remove</button>` : ''}
+          </div>
+          <div class="fc-body" style="padding:10px 14px 14px;">
+            <div class="ledger-wrap" style="padding:0;">
+              ${renderTeeHolesTable(ti, t.holes, 0, 9, 'Front 9')}
+              ${renderTeeHolesTable(ti, t.holes, 9, 18, 'Back 9')}
+            </div>
+          </div>
+        </div>
+      `).join('')}
+
+      <button class="log-practice-btn" id="addTeeSetBtn" style="margin-bottom:14px;">+ Add Tee Set</button>
+      <div class="na-note">Par is required (defaults to 4) — tee markers move day to day, but par doesn't. Yardage is optional; leave any hole blank if you'd rather skip it.</div>
+
+      <button class="finish-btn" id="saveCourseBtn">Save Course</button>
+      <button class="save-btn" id="cancelCourseEditorBtn" style="background:var(--paper-raised);color:var(--ink-soft);border:1px solid var(--line-strong);margin-top:8px;">Cancel</button>
+    </section>
+  `;
+}
+
+// ---------- Round Start (course selection) ----------
+function renderRoundStartView(){
+  return `
+    <section>
+      <div class="home-section-title" style="margin:0 0 8px;">Start a Round</div>
+      <button class="action-card" id="startFreeformRound">
+        <div><div class="ac-title">Freeform Round</div>
+        <div class="ac-sub">Type the course name by hand, no par pre-fill</div></div>
+        <div class="ac-arrow">&#8594;</div>
+      </button>
+      ${courses.length ? `
+        <div class="home-section-title">Or Pick a Saved Course</div>
+        ${courses.map(c=>`
+          <div class="round-card" style="flex-direction:column;align-items:stretch;">
+            <div class="rc-course" style="margin-bottom:8px;">${escapeHtml(c.name)}</div>
+            <div class="btn-row" style="gap:6px;flex-wrap:wrap;">
+              ${c.teeLabels.map((label,ti)=>`<button data-starttee="${c.id}:${ti}" style="flex:0 0 auto;padding:8px 10px;font-size:12px;">${escapeHtml(label||('Tee '+(ti+1)))}</button>`).join('')}
+            </div>
+          </div>
+        `).join('')}
+      ` : `<div class="na-note">No saved courses yet — add one from the Courses tab to pre-fill par next time.</div>`}
+    </section>
+  `;
+}
+
+// ---------- Caddie ----------
+function renderCaddieView(){
+  const {playsLike, parts} = computePlaysLike(shot);
+  const recs = recommendClubs(shot);
+  const lie = LIES.find(l=>l.id===shot.lie);
+  const slope = SLOPES.find(l=>l.id===shot.slope);
+  const notes = [lie&&lie.note, slope&&slope.note].filter(Boolean);
+
+  return `
+    <div class="target-box">
+      <div class="tlabel">Yardage to target</div>
+      <input class="tinput" id="targetInput" type="number" inputmode="numeric" value="${shot.target}">
+      <div class="target-steps">
+        <button data-tstep="-10">−10</button>
+        <button data-tstep="-5">−5</button>
+        <button data-tstep="-1">−1</button>
+        <button data-tstep="1">+1</button>
+        <button data-tstep="5">+5</button>
+        <button data-tstep="10">+10</button>
+      </div>
+    </div>
+
+    <div class="plays-like">
+      <div class="pl-lbl">Plays like (full swing)</div>
+      <div class="pl-num">${Math.round(playsLike)} yds</div>
+      <div class="breakdown">
+        ${parts.length ? parts.map(p=>`<span>${p}</span>`).join('') : `<span>Neutral conditions</span>`}
+      </div>
+    </div>
+
+    <section style="padding-bottom:6px;">
+      ${recs.length===0 ? `<div class="na-note">Add clubs to your bag first.</div>` : recs.map((r,i)=>{
+        const roll = clubRoll(r.club);
+        return `
+        <div class="rec-card ${i===0?'primary':''}">
+          <div class="rec-rank">${i+1}</div>
+          <div class="rec-body">
+            <div class="rec-club">${escapeHtml(r.club.name)}</div>
+            <div class="rec-swing">${r.swing.label}${(r.club.shots||[]).length ? ` · ${(r.club.shots||[]).length} logged` : ' · stock number'}</div>
+            ${roll ? `<div class="rec-swing">carry ~${Math.round(r.yards-roll.roll)}y · roll ~${Math.round(roll.roll)}y</div>` : ``}
+          </div>
+          <div class="rec-yards">
+            <div class="ry">${Math.round(r.yards)}</div>
+            <div class="rd">${r.diff>0?'+':''}${Math.round(r.diff)} vs need</div>
+          </div>
+        </div>`;
+      }).join('')}
+      ${notes.length ? notes.map(n=>`<div class="lie-note">${n}</div>`).join('') : ''}
+    </section>
+
+    <section style="padding-top:0;">
+      <div class="field">
+        <span class="field-label">Lie</span>
+        <div class="btn-row" id="lieRow" style="gap:6px;">
+          ${LIES.map(l=>`<button data-lie="${l.id}" class="${shot.lie===l.id?'sel':''}" style="flex:0 0 auto;padding:8px 10px;font-size:12px;">${l.label}</button>`).join('')}
+        </div>
+      </div>
+
+      <div class="field">
+        <span class="field-label">Stance / Slope</span>
+        <div class="btn-row" id="slopeRow" style="gap:6px;">
+          ${SLOPES.map(l=>`<button data-slope="${l.id}" class="${shot.slope===l.id?'sel':''}" style="flex:0 0 auto;padding:8px 10px;font-size:12px;">${l.label}</button>`).join('')}
+        </div>
+      </div>
+
+      <div class="field">
+        <span class="field-label">Wind Direction</span>
+        <div class="btn-row" id="windDirRow">
+          ${[['none','Calm'],['head','Into'],['tail','Down'],['cross','Cross']].map(([v,l])=>
+            `<button data-winddir="${v}" class="${shot.windDir===v?(v==='head'?'sel bad':'sel'):''}">${l}</button>`).join('')}
+        </div>
+      </div>
+
+      ${shot.windDir!=='none' ? `
+      <div class="field">
+        <span class="field-label">Wind Speed (mph)</span>
+        <div class="btn-row" id="windMphRow">
+          ${[5,10,15,20,25].map(v=>`<button data-windmph="${v}" class="${shot.windMph===v?'sel':''}">${v}</button>`).join('')}
+        </div>
+      </div>` : ''}
+
+      <div class="field">
+        <span class="field-label">Elevation Change to Green (feet)</span>
+        <div class="btn-row" id="elevRow">
+          ${[-30,-15,0,15,30].map(v=>`<button data-elev="${v}" class="${shot.elev===v?'sel':''}">${v>0?'+':''}${v}</button>`).join('')}
+        </div>
+      </div>
+
+      <div class="field">
+        <span class="field-label">Where's the trouble?</span>
+        <div class="btn-row" id="troubleRow">
+          ${[['none','None'],['short','Short'],['long','Long']].map(([v,l])=>
+            `<button data-trouble="${v}" class="${shot.trouble===v?(v==='none'?'sel':'sel bad'):''}">${l}</button>`).join('')}
+        </div>
+        ${shot.trouble==='short' ? `
+        <div class="btn-row" id="mustCarryRow" style="margin-top:6px;">
+          <button data-mustcarry="1" class="${shot.mustCarry?'sel bad':''}">Must Carry It (bunker/water)</button>
+        </div>` : ''}
+        ${shot.trouble!=='none' ? `<div class="na-note">Filtering out any club that risks finishing ${shot.trouble}${shot.mustCarry?' on total distance, or short on carry':''}. This is where amateurs bleed strokes — the miss you can't afford should pick the club, not the flag.</div>` : ''}
+      </div>
+
+      <div class="field">
+        <span class="field-label">Course Conditions</span>
+        <div class="compact-grid">
+          <div>
+            <input class="mini-input" id="tempInput" type="number" inputmode="numeric" value="${shot.tempF}">
+            <div class="na-note" style="text-align:center;padding:4px 0;">Temp °F</div>
+          </div>
+          <div>
+            <input class="mini-input" id="altInput" type="number" inputmode="numeric" value="${shot.alt}">
+            <div class="na-note" style="text-align:center;padding:4px 0;">Altitude ft</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <div class="home-section-title">Log What Actually Happened</div>
+    <section style="padding-top:2px;">
+      <div class="na-note" style="padding-top:0;">This is what keeps your yardages honest. Enter the club you hit and how far it finished — the app strips out today's wind, elevation and temperature to recover the neutral-condition number, then folds it into your learned yardage.</div>
+      <div class="field">
+        <span class="field-label">Club Hit</span>
+        <select class="field-select" id="logClub">
+          <option value="">Select club</option>
+          ${bag.map(c=>`<option value="${escapeHtml(c.id)}">${escapeHtml(c.name)}</option>`).join('')}
+        </select>
+      </div>
+      <div class="field">
+        <span class="field-label">Swing</span>
+        <div class="btn-row" id="logSwingRow">
+          ${SWINGS.map(s=>`<button data-logswing="${s.id}" class="${(window._logSwing||'full')===s.id?'sel':''}">${s.short}</button>`).join('')}
+        </div>
+      </div>
+      <div class="field">
+        <span class="field-label">Strike</span>
+        <div class="btn-row" id="logStrikeRow">
+          ${[['flush','Flushed'],['solid','Solid'],['mishit','Mishit']].map(([v,l])=>
+            `<button data-logstrike="${v}" class="${(window._logStrike||'flush')===v?(v==='mishit'?'sel bad':'sel'):''}">${l}</button>`).join('')}
+        </div>
+      </div>
+      <div class="field">
+        <span class="field-label">Direction</span>
+        <div class="btn-row" id="logDirRow">
+          ${[['left','Left'],['center','Center'],['right','Right']].map(([v,l])=>
+            `<button data-logdir="${v}" class="${(window._logDir||'center')===v?'sel':''}">${l}</button>`).join('')}
+        </div>
+      </div>
+      <div class="compact-grid">
+        <div class="field">
+          <span class="field-label">Finished (yards)</span>
+          <input class="mini-input" id="logDist" type="number" inputmode="numeric" placeholder="e.g. 148">
+        </div>
+        <div class="field">
+          <span class="field-label">Roll After Landing (optional)</span>
+          <input class="mini-input" id="logRoll" type="number" inputmode="numeric" placeholder="e.g. 8">
+        </div>
+      </div>
+      <button class="save-btn" id="logShotBtn">Log This Shot</button>
+      <div class="na-note" id="logMsg"></div>
+    </section>
+  `;
+}
+
+function renderFocusSection(){
+  if(!cachedFocus.length){
+    return `
+      <div class="home-section-title">Focus</div>
+      <div class="focus-card"><div class="fc-head" style="cursor:default;"><div class="fc-line" style="color:var(--ink-soft);font-style:italic;">Not enough logged data yet for a personal focus. Play a few rounds and log a few Caddie shots — this fills in on its own.</div></div></div>
+    `;
+  }
+  return `
+    <div class="home-section-title">Focus — the two things worth working on</div>
+    ${cachedFocus.map(f=>{
+      const open = !!focusExpanded[f.key];
+      const ba = beforeAfterFor(f.key);
+      return `
+      <div class="focus-card ${f.tier}">
+        <div class="fc-head" data-focustoggle="${f.key}">
+          <span class="fc-tag ${f.tier}">${f.tier}</span>
+          <div class="fc-line">${f.line}</div>
+          <div class="fc-chev">${open?'▲':'▼'}</div>
+        </div>
+        ${open ? `
+        <div class="fc-body">
+          <p>${f.detail}</p>
+          <div class="drill-box">
+            <div class="dtitle">${escapeHtml(f.drillTitle)}</div>
+            <div class="dbody">${escapeHtml(f.drillBody)}</div>
+          </div>
+          ${ba && (ba.before||ba.after) ? `
+          <div class="before-after">
+            <b>${escapeHtml(f.reassessLabel)}</b><br>
+            Before ${ba.firstDate}: ${ba.before? Math.round(ba.before.value*10)/10 + (typeof ba.before.value==='number'&&Math.abs(ba.before.value)<=100&&f.key.indexOf('Bias')<0?'%':'') + ' (n='+ba.before.n+')' : 'no data yet'}<br>
+            Since: ${ba.after? Math.round(ba.after.value*10)/10 + (typeof ba.after.value==='number'&&Math.abs(ba.after.value)<=100&&f.key.indexOf('Bias')<0?'%':'') + ' (n='+ba.after.n+')' : 'no data yet'}
+          </div>` : ``}
+          <div class="field" style="margin-top:10px;margin-bottom:4px;">
+            <span class="field-label">Log a Practice Rep</span>
+            <input class="mini-input" id="practiceNote-${f.key}" placeholder="e.g. 7/10 hit the gate" style="text-align:left;">
+          </div>
+          <button class="log-practice-btn" data-logpractice="${f.key}" data-focuslabel="${escapeHtml(f.line)}">Log Practice Session</button>
+          ${practiceLog.filter(p=>p.focusKey===f.key).slice(0,3).map(p=>`<div class="practice-entry">${p.date} — ${escapeHtml(p.note||'logged, no note')}</div>`).join('')}
+        </div>` : ``}
+      </div>`;
+    }).join('')}
+  `;
+}
+
+function renderHomeView(){
+  const cs = careerStats(history);
+  const recent = history.slice(0,3);
+  return `
+    ${cs ? `
+    <div class="home-section-title">Career Totals — ${cs.rounds} round${cs.rounds===1?'':'s'} logged</div>
+    <div class="career-stats">
+      <div class="career-tile"><div class="num">${cs.best}</div><div class="lbl">Best Score (${cs.bestToPar>0?'+':''}${cs.bestToPar})</div></div>
+      <div class="career-tile"><div class="num">${cs.avgScore.toFixed(1)}</div><div class="lbl">Avg Score</div></div>
+      <div class="career-tile"><div class="num">${cs.avgGir}%</div><div class="lbl">Avg GIR</div></div>
+      <div class="career-tile"><div class="num">${cs.avgPutts.toFixed(1)}</div><div class="lbl">Avg Putts/Rd</div></div>
+    </div>
+    ` : `<div class="empty-state" style="padding-top:30px;"><b>No rounds logged yet</b>Start a round below — your totals and trends will build up here.</div>`}
+
+    ${renderFocusSection()}
+
+    <button class="action-card" id="goNewRound">
+      <div><div class="ac-title">${roundInProgress ? 'Continue Current Round' : 'Start New Round'}</div>
+      <div class="ac-sub">${roundInProgress ? 'Hole '+(currentHole+1)+' in progress' : 'Track hole-by-hole as you play'}</div></div>
+      <div class="ac-arrow">&#8594;</div>
+    </button>
+    <button class="action-card secondary" id="goCaddie">
+      <div><div class="ac-title">Caddie</div>
+      <div class="ac-sub">Club recommendation for the shot in front of you</div></div>
+      <div class="ac-arrow">&#8594;</div>
+    </button>
+    <button class="action-card secondary" id="goBag">
+      <div><div class="ac-title">My Bag</div>
+      <div class="ac-sub">${allShotsCount()} shot${allShotsCount()===1?'':'s'} logged · yardages self-calibrating</div></div>
+      <div class="ac-arrow">&#8594;</div>
+    </button>
+    <button class="action-card secondary" id="goHistory">
+      <div><div class="ac-title">Past Rounds</div>
+      <div class="ac-sub">View, compare, or delete saved rounds</div></div>
+      <div class="ac-arrow">&#8594;</div>
+    </button>
+
+    ${recent.length ? `
+      <div class="home-section-title">Most Recent</div>
+      <section style="padding-top:0;">
+        ${recent.map(h=>`
+          <div class="round-card">
+            <div class="rc-left">
+              <div class="rc-course">${escapeHtml(h.course||'Unnamed round')}</div>
+              <div class="rc-date">${h.date} · GIR ${h.girPct}%</div>
+            </div>
+            <div class="rc-right">
+              <div class="rc-score">${h.score}</div>
+              <div class="rc-topar">${h.toPar>0?'+':''}${h.toPar}</div>
+            </div>
+          </div>
+        `).join('')}
+      </section>
+      <div class="view-all" id="viewAllLink">View all ${history.length} rounds →</div>
+    ` : ``}
+  `;
+}
+
+function renderRoundView(stats){
+  const h = round.holes[currentHole];
+  const dots = round.holes.map((hh,i)=>{
+    const cls = i===currentHole ? 'current' : (hh.gir!==null ? 'done' : '');
+    return `<span class="${cls}"></span>`;
+  }).join('');
+  const ss = computeStrokesSummary(stats);
+  const isBlowup = (h.score - h.par) >= 2;
+
+  return `
+    <div class="headline-stats">
+      <div class="stat-tile"><div class="num">${stats.toPar>0?'+':''}${stats.toPar}</div><div class="lbl">To Par</div></div>
+      <div class="stat-tile"><div class="num">${stats.girPct}%</div><div class="lbl">GIR</div></div>
+      <div class="stat-tile"><div class="num">${stats.putts}</div><div class="lbl">Putts</div></div>
+      <div class="stat-tile"><div class="num">${stats.firPct}%</div><div class="lbl">FIR</div></div>
+    </div>
+
+    ${stats.girAttempts>=3 ? `
+    <div class="strokes-summary">
+      <div class="ss-tile"><div class="ssn ${ss.driving>=0?'ss-pos':'ss-neg'}">${ss.driving>=0?'+':''}${ss.driving.toFixed(1)}</div><div class="ssl">Driving</div></div>
+      <div class="ss-tile"><div class="ssn ${ss.approach>=0?'ss-pos':'ss-neg'}">${ss.approach>=0?'+':''}${ss.approach.toFixed(1)}</div><div class="ssl">Approach</div></div>
+      <div class="ss-tile"><div class="ssn ${ss.shortGame>=0?'ss-pos':'ss-neg'}">${ss.shortGame>=0?'+':''}${ss.shortGame.toFixed(1)}</div><div class="ssl">Short Game</div></div>
+      <div class="ss-tile"><div class="ssn ${ss.putting>=0?'ss-pos':'ss-neg'}">${ss.putting>=0?'+':''}${ss.putting.toFixed(1)}</div><div class="ssl">Putting</div></div>
+    </div>
+    <div class="na-note" style="margin:-8px 20px 8px;">Rough estimate of strokes vs. a typical low-80s round in each area — not true strokes-gained, just a proportional read on where today went.</div>
+    ` : ``}
+
+    <div class="hole-nav">
+      <button class="arrow" id="prevHole" ${currentHole===0?'disabled':''}>&#8592;</button>
+      <div class="hole-badge">
+        <div><div class="hnum">${currentHole+1}</div>${round.courseId ? `<div class="na-note" style="padding:0;text-align:center;">Par ${h.par}${h.refYardage!=null?` · ${h.refYardage}y`:''}</div>` : ``}</div>
+        <div class="hole-dots">${dots}</div>
+      </div>
+      <button class="arrow" id="nextHole" ${currentHole===17?'disabled':''}>&#8594;</button>
+    </div>
+
+    <div class="score-display">
+      <div style="text-align:center;">
+        <div class="score-shape ${scoreShapeClass(h.score,h.par)}"><div class="core">${h.score}</div></div>
+        <div class="score-caption">${scoreCaption(h.score,h.par)}</div>
+        <div class="score-steppers">
+          <button id="scoreDown">&minus;</button>
+          <button id="scoreUp">&plus;</button>
+        </div>
+      </div>
+    </div>
+
+    <section style="padding-top:4px;">
+      <div class="field">
+        <span class="field-label">Par</span>
+        <div class="btn-row" id="parRow">
+          ${[3,4,5].map(p=>`<button data-par="${p}" class="${h.par===p?'sel':''}">${p}</button>`).join('')}
+        </div>
+      </div>
+
+      ${isBlowup ? `
+      <div class="blowup-box">
+        <span class="field-label">What happened on this one?</span>
+        <div class="btn-row" id="blowupRow" style="gap:6px;margin-top:6px;">
+          ${[['penalty','Penalty/OB'],['shortgame','Short Game'],['threeputt','3-Putt'],['teeshot','Tee Shot'],['other','Other']].map(([v,l])=>
+            `<button data-blowup="${v}" class="${h.blowup===v?'sel bad':''}" style="flex:0 0 auto;padding:7px 9px;font-size:11.5px;">${l}</button>`).join('')}
+        </div>
+      </div>` : ``}
+
+      ${h.par!==3 ? `
+      <div class="field">
+        <span class="field-label">Fairway</span>
+        <div class="btn-row" id="firRow">
+          <button data-fir="hit" class="${h.fir==='hit'?'sel':''}">Hit</button>
+          <button data-fir="miss" class="${h.fir==='miss'?'sel bad':''}">Miss</button>
+        </div>
+      </div>` : `<div class="na-note">Par 3 — no fairway to track. Tee shot goes straight at the green.</div>`}
+
+      <div class="field">
+        <span class="field-label">Approach Yardage (exact, optional)</span>
+        <input class="mini-input" id="approachYardsInput" type="number" inputmode="numeric" placeholder="e.g. 142" value="${h.approachYards!=null?h.approachYards:''}" style="text-align:left;padding-left:12px;">
+      </div>
+
+      <div class="field">
+        <span class="field-label">Approach Distance</span>
+        <div class="btn-row" id="approachRow">
+          ${APPROACH_RANGES.map(a=>`<button data-approach="${a}" class="${h.approach===a?'sel':''}">${a}</button>`).join('')}
+        </div>
+      </div>
+
+      ${h.approachYards!=null ? (
+        caddieOpenHole===currentHole ? renderInlineCaddie(h) : `<button class="get-club-btn" id="getClubBtn">Get Club Recommendation</button>`
+      ) : ``}
+
+      <div class="field" style="margin-top:16px;">
+        <span class="field-label">Club Into Green</span>
+        <select class="field-select" id="clubSelect">
+          <option value="">Select club</option>
+          ${CLUBS.map(c=>`<option value="${c}" ${h.club===c?'selected':''}>${c}</option>`).join('')}
+        </select>
+        ${h.recClub ? `<div class="na-note">Caddie recommended <b>${escapeHtml(h.recClub)}</b> (${escapeHtml(h.recSwing||'')}). ${h.followedRec===false?'You went with something else.':'You went with it.'}</div>` : ``}
+      </div>
+
+      <div class="field">
+        <span class="field-label">Green In Regulation</span>
+        <div class="btn-row" id="girRow">
+          <button data-gir="hit" class="${h.gir==='hit'?'sel':''}">Hit</button>
+          <button data-gir="miss" class="${h.gir==='miss'?'sel bad':''}">Miss</button>
+        </div>
+      </div>
+
+      ${h.gir==='miss' ? `
+      <div class="field">
+        <span class="field-label">Up &amp; Down</span>
+        <div class="btn-row" id="udRow">
+          <button data-ud="yes" class="${h.ud==='yes'?'sel':''}">Saved It</button>
+          <button data-ud="no" class="${h.ud==='no'?'sel bad':''}">No</button>
+        </div>
+      </div>` : ``}
+
+      <div class="field">
+        <span class="field-label">Putts</span>
+        <div class="btn-row" id="puttsRow">
+          ${[0,1,2,3,4,5].map(n=>`<button data-putts="${n}" class="${h.putts===n?'sel':''}">${n===5?'5+':n}</button>`).join('')}
+        </div>
+      </div>
+
+      <div class="field">
+        <span class="field-label">First Putt From</span>
+        <div class="btn-row" id="puttDistRow">
+          ${[['in10','Inside 10ft'],['10to25','10-25ft'],['25plus','25ft+']].map(([v,l])=>
+            `<button data-puttdist="${v}" class="${h.puttDist===v?'sel':''}">${l}</button>`).join('')}
+        </div>
+      </div>
+    </section>
+
+    <div class="ledger-wrap">
+      <table class="ledger">
+        <thead><tr><th>H</th><th>Par</th><th>Score</th><th>FIR</th><th>GIR</th><th>Putts</th></tr></thead>
+        <tbody>
+          ${round.holes.map((hh,i)=>{
+            const diff = hh.score-hh.par;
+            const scoreCls = diff>0?'score-over':(diff<0?'score-under':'');
+            return `<tr class="${i===currentHole?'current-row':''}" data-jump="${i}">
+              <td>${i+1}</td><td>${hh.par}</td>
+              <td class="${scoreCls}">${hh.score}</td>
+              <td>${hh.par===3?'—':(hh.fir==='hit'?'✓':hh.fir==='miss'?'✕':'')}</td>
+              <td>${hh.gir==='hit'?'✓':hh.gir==='miss'?'✕':''}</td>
+              <td>${hh.putts}</td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="insights-panel">
+      <h3>What today's numbers say</h3>
+      ${renderInsightsList(stats)}
+    </div>
+
+    <section>
+      <button class="finish-btn" id="saveRoundBtn">Save This Round</button>
+    </section>
+  `;
+}
+
+function renderInlineCaddie(h){
+  shot.target = h.approachYards;
+  const {playsLike} = computePlaysLike(shot);
+  const recs = recommendClubs(shot);
+  return `
+    <div class="inline-caddie">
+      <div class="mini-plays-like"><div class="mpl-num">${Math.round(playsLike)}y plays like</div></div>
+      <div class="btn-row" id="inlineLieRow" style="gap:5px;margin-bottom:8px;">
+        ${LIES.slice(0,5).map(l=>`<button data-inlielie="${l.id}" class="${shot.lie===l.id?'sel':''}" style="flex:0 0 auto;padding:6px 8px;font-size:11px;">${l.label}</button>`).join('')}
+      </div>
+      <div class="btn-row" id="inlineTroubleRow" style="gap:5px;margin-bottom:10px;">
+        ${[['none','No Trouble'],['short','Short'],['long','Long']].map(([v,l])=>
+          `<button data-inlietrouble="${v}" class="${shot.trouble===v?(v==='none'?'sel':'sel bad'):''}" style="flex:0 0 auto;padding:6px 8px;font-size:11px;">${l}</button>`).join('')}
+      </div>
+      ${recs.map((r,i)=>`
+        <button class="use-club-btn" data-userec="${i}">
+          <div>
+            <div class="ucb-name">${escapeHtml(r.club.name)}${i===0?'<span class="rec-badge">BEST</span>':''}</div>
+            <div class="ucb-sub">${r.swing.label}</div>
+          </div>
+          <div class="ucb-y">${Math.round(r.yards)}y</div>
+        </button>
+      `).join('')}
+      <button class="log-practice-btn" id="closeInlineCaddie" style="margin-top:4px;">Close Without Choosing</button>
+    </div>
+  `;
+}
+
+function renderInsightsList(stats){
+  const list = buildInsights(round, stats, history);
+  if(!list){
+    return `<div class="empty">Enter GIR on at least 3 holes and I'll start surfacing patterns here.</div>`;
+  }
+  return `<ul>${list.map(i=>`<li>${i}</li>`).join('')}</ul>`;
+}
+
+function renderHistoryView(){
+  if(history.length===0){
+    return `<div class="empty-state"><b>No rounds saved yet</b>Finish tracking a round and tap "Save This Round" — trends and comparisons will build up here over time.</div>`;
+  }
+  const girSeries = history.slice(0,10).reverse().map(h=>h.girPct);
+  const puttsSeries = history.slice(0,10).reverse().map(h=>h.puttsAvg*18);
+  return `
+    <section>
+      ${history.map(h=>`
+        <div class="round-card">
+          <div class="rc-left">
+            <div class="rc-course">${escapeHtml(h.course||'Unnamed round')}</div>
+            <div class="rc-date">${h.date} · GIR ${h.girPct}% · ${h.puttsAvg.toFixed(1)} putts/hole</div>
+          </div>
+          <div class="rc-right">
+            <div class="rc-score">${h.score}</div>
+            <div class="rc-topar">${h.toPar>0?'+':''}${h.toPar}</div>
+            <button class="rc-del" data-delid="${h.id}">Delete</button>
+          </div>
+        </div>
+      `).join('')}
+
+      <div class="sparkline-block">
+        <h4>GIR % — last ${girSeries.length} rounds</h4>
+        ${sparkline(girSeries, 0, 100)}
+      </div>
+      <div class="sparkline-block">
+        <h4>Putts per round — last ${puttsSeries.length} rounds</h4>
+        ${sparkline(puttsSeries, 24, 44, true)}
+      </div>
+    </section>
+  `;
+}
+
+function sparkline(values, min, max, invert){
+  if(values.length<2) return `<div class="na-note">Save a couple more rounds to see a trend line.</div>`;
+  const w=280,h=60,pad=6;
+  const norm = v => h-pad - ((v-min)/(max-min))*(h-2*pad);
+  const step = (w-2*pad)/(values.length-1);
+  const pts = values.map((v,i)=>`${pad+i*step},${norm(v)}`).join(' ');
+  const color = invert ? '#A8402C' : '#1F3D2E';
+  return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" style="max-width:100%;">
+    <polyline points="${pts}" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    ${values.map((v,i)=>`<circle cx="${pad+i*step}" cy="${norm(v)}" r="2.5" fill="${color}"/>`).join('')}
+  </svg>`;
+}
+
+function escapeHtml(s){
+  return (s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+// ---------- Event handling ----------
+function attachHandlers(){
+  if(inBagSetupWizard){
+    const qs = document.getElementById('setupQuickStart');
+    if(qs) qs.onclick = async ()=>{
+      bag = BAG_PRESET.map(c=>({...c, id:c.name, shots:[]}));
+      bagSetupStep = 'editing';
+      await saveBag(); render();
+    };
+    const bo = document.getElementById('setupBuildOwn');
+    if(bo) bo.onclick = async ()=>{
+      bag = [];
+      bagSetupStep = 'editing';
+      await saveBag(); render();
+    };
+    const finish = document.getElementById('finishBagSetup');
+    if(finish) finish.onclick = ()=>{
+      inBagSetupWizard = false;
+      activeTab = 'home';
+      render();
+    };
+    wireClubListHandlers();
+    return;
+  }
+
+  document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{activeTab=b.dataset.tab; render();});
+
+  const courseInput = document.getElementById('courseInput');
+  if(courseInput) courseInput.oninput = e => round.course = e.target.value;
+  const dateInput = document.getElementById('dateInput');
+  if(dateInput) dateInput.oninput = e => round.date = e.target.value;
+  const slopeInput = document.getElementById('slopeInput');
+  if(slopeInput) slopeInput.oninput = e => round.slope = e.target.value;
+  const ratingInput = document.getElementById('ratingInput');
+  if(ratingInput) ratingInput.oninput = e => round.rating = e.target.value;
+
+  if(activeTab==='home'){
+    const goNew = document.getElementById('goNewRound');
+    if(goNew) goNew.onclick = ()=>{
+      if(!roundInProgress){ roundStartStep = 'selectCourse'; }
+      activeTab = 'round';
+      render();
+    };
+    const goCad = document.getElementById('goCaddie');
+    if(goCad) goCad.onclick = ()=>{ activeTab='caddie'; render(); };
+    const goBag = document.getElementById('goBag');
+    if(goBag) goBag.onclick = ()=>{ activeTab='bag'; render(); };
+    const goHist = document.getElementById('goHistory');
+    if(goHist) goHist.onclick = ()=>{ activeTab='history'; render(); };
+    const viewAll = document.getElementById('viewAllLink');
+    if(viewAll) viewAll.onclick = ()=>{ activeTab='history'; render(); };
+    document.querySelectorAll('[data-focustoggle]').forEach(el=>el.onclick=()=>{
+      const k = el.dataset.focustoggle;
+      focusExpanded[k] = !focusExpanded[k];
+      render();
+    });
+    document.querySelectorAll('[data-logpractice]').forEach(btn=>btn.onclick = async ()=>{
+      const key = btn.dataset.logpractice;
+      const label = btn.dataset.focuslabel;
+      const noteInput = document.getElementById('practiceNote-'+key);
+      const note = noteInput ? noteInput.value : '';
+      btn.textContent = 'Saving…';
+      await logPracticeEntry(key, label, note);
+      render();
+    });
+    return;
+  }
+
+  if(activeTab==='history'){
+    document.querySelectorAll('[data-delid]').forEach(b=>b.onclick = (e)=>{
+      e.stopPropagation();
+      deleteRound(b.dataset.delid);
+    });
+    return;
+  }
+
+  if(activeTab==='bag'){
+    wireClubListHandlers();
+    const resetBtn = document.getElementById('resetBagBtn');
+    if(resetBtn) resetBtn.onclick = async ()=>{
+      if(!confirm('Clear your bag and start over? All logged shot data will be erased.')) return;
+      bag = [];
+      inBagSetupWizard = true;
+      bagSetupStep = 'choice';
+      await refreshFocus(); render();
+    };
+    return;
+  }
+
+  if(activeTab==='caddie'){
+    const ti = document.getElementById('targetInput');
+    if(ti){ ti.oninput = e => shot.target = Number(e.target.value)||0; ti.onchange = ()=>render(); }
+    document.querySelectorAll('[data-tstep]').forEach(b=>b.onclick = ()=>{
+      shot.target = Math.max(1, shot.target + Number(b.dataset.tstep)); render();
+    });
+    document.querySelectorAll('[data-lie]').forEach(b=>b.onclick=()=>{ shot.lie=b.dataset.lie; render(); });
+    document.querySelectorAll('[data-slope]').forEach(b=>b.onclick=()=>{ shot.slope=b.dataset.slope; render(); });
+    document.querySelectorAll('[data-winddir]').forEach(b=>b.onclick=()=>{
+      shot.windDir=b.dataset.winddir;
+      if(shot.windDir==='none') shot.windMph=0;
+      else if(shot.windMph===0) shot.windMph=10;
+      render();
+    });
+    document.querySelectorAll('[data-windmph]').forEach(b=>b.onclick=()=>{ shot.windMph=Number(b.dataset.windmph); render(); });
+    document.querySelectorAll('[data-elev]').forEach(b=>b.onclick=()=>{ shot.elev=Number(b.dataset.elev); render(); });
+    document.querySelectorAll('[data-trouble]').forEach(b=>b.onclick=()=>{ shot.trouble=b.dataset.trouble; if(shot.trouble!=='short') shot.mustCarry=false; render(); });
+    document.querySelectorAll('[data-mustcarry]').forEach(b=>b.onclick=()=>{ shot.mustCarry=!shot.mustCarry; render(); });
+
+    const tempI = document.getElementById('tempInput');
+    if(tempI) tempI.onchange = async e => { shot.tempF = Number(e.target.value)||70; await saveSettings(); render(); };
+    const altI = document.getElementById('altInput');
+    if(altI) altI.onchange = async e => { shot.alt = Number(e.target.value)||0; await saveSettings(); render(); };
+
+    document.querySelectorAll('[data-logswing]').forEach(b=>b.onclick=()=>{ window._logSwing=b.dataset.logswing; render(); });
+    document.querySelectorAll('[data-logstrike]').forEach(b=>b.onclick=()=>{ window._logStrike=b.dataset.logstrike; render(); });
+    document.querySelectorAll('[data-logdir]').forEach(b=>b.onclick=()=>{ window._logDir=b.dataset.logdir; render(); });
+
+    const logBtn = document.getElementById('logShotBtn');
+    if(logBtn) logBtn.onclick = async ()=>{
+      const clubId = document.getElementById('logClub').value;
+      const actual = Number(document.getElementById('logDist').value);
+      const rollVal = document.getElementById('logRoll').value;
+      const msg = document.getElementById('logMsg');
+      if(!clubId || !actual){ msg.textContent = 'Pick a club and enter how far it finished.'; return; }
+      const club = bag.find(c=>c.id===clubId);
+      const swingId = window._logSwing || 'full';
+      const sw = SWINGS.find(s=>s.id===swingId);
+      const strike = window._logStrike || 'flush';
+      const direction = window._logDir || 'center';
+
+      // Strip today's conditions back out to recover the neutral-condition yardage,
+      // then divide out the swing length to get a comparable full-swing number.
+      const m = conditionMultiplier(shot, swingId);
+      const neutralAtSwing = (actual + shot.elev/3) * m;
+      const neutral = neutralAtSwing / sw.mult;
+
+      club.shots = club.shots || [];
+      club.shots.push({
+        date: new Date().toISOString().slice(0,10),
+        swing: swingId, strike, direction, lie: shot.lie,
+        target: shot.target, actual, neutral,
+        roll: rollVal!=='' ? Number(rollVal) : undefined
+      });
+      if(club.shots.length > 40) club.shots = club.shots.slice(-40);
+      await saveBag();
+      await refreshFocus();
+      const before = club.yards;
+      const after = effectiveYardageForSwing(club, swingId);
+      msg.innerHTML = `Logged. Neutral-condition value for that swing: <b>${Math.round(neutral)}y</b>. ${club.name} ${sw.label} learned yardage is now <b>${Math.round(after)}y</b>.`;
+      document.getElementById('logDist').value = '';
+      document.getElementById('logRoll').value = '';
+      window._logDir = 'center';
+      render();
+    };
+    return;
+  }
+
+  if(activeTab==='round' && roundStartStep==='selectCourse'){
+    const ff = document.getElementById('startFreeformRound');
+    if(ff) ff.onclick = ()=>{
+      round = newRound();
+      currentHole = 0;
+      roundStartStep = null;
+      render();
+    };
+    document.querySelectorAll('[data-starttee]').forEach(b=>b.onclick = async ()=>{
+      const [courseId, teeIdxStr] = b.dataset.starttee.split(':');
+      const teeIdx = Number(teeIdxStr);
+      try{
+        const res = await window.storage.get('course:'+courseId);
+        if(!res || !res.value) return;
+        const course = JSON.parse(res.value);
+        const tee = course.tees[teeIdx];
+        if(!tee) return;
+        round = newRound();
+        round.course = course.name;
+        round.courseId = course.id;
+        round.teeId = tee.id;
+        round.holes = tee.holes.map(h=>({...blankHole(h.par), refYardage: h.yardage}));
+        currentHole = 0;
+        roundStartStep = null;
+        render();
+      }catch(e){ console.error('failed to load course', e); }
+    });
+    return;
+  }
+
+  if(activeTab==='courses'){
+    if(courseEditor){
+      const nameInput = document.getElementById('courseEditorName');
+      if(nameInput) nameInput.oninput = e => courseEditor.name = e.target.value;
+      document.querySelectorAll('[data-teelabel]').forEach(inp=>inp.oninput = e=>{
+        courseEditor.tees[Number(inp.dataset.teelabel)].label = e.target.value;
+      });
+      document.querySelectorAll('[data-removetee]').forEach(b=>b.onclick = ()=>{
+        courseEditor.tees.splice(Number(b.dataset.removetee), 1);
+        render();
+      });
+      document.querySelectorAll('[data-holepar]').forEach(sel=>sel.onchange = ()=>{
+        const [ti, hi] = sel.dataset.holepar.split(':').map(Number);
+        courseEditor.tees[ti].holes[hi].par = Number(sel.value);
+      });
+      document.querySelectorAll('[data-holeyardage]').forEach(inp=>inp.oninput = ()=>{
+        const [ti, hi] = inp.dataset.holeyardage.split(':').map(Number);
+        courseEditor.tees[ti].holes[hi].yardage = inp.value!=='' ? Number(inp.value) : null;
+      });
+      const addTee = document.getElementById('addTeeSetBtn');
+      if(addTee) addTee.onclick = ()=>{
+        courseEditor.tees.push({id:'tee-'+Date.now(), label:'', holes: blankCourseHoles()});
+        render();
+      };
+      const saveBtn = document.getElementById('saveCourseBtn');
+      if(saveBtn) saveBtn.onclick = async ()=>{
+        if(!courseEditor.name.trim()){ alert('Give the course a name first.'); return; }
+        const fullCourse = {
+          id: courseEditor.id || ('course-'+Date.now()),
+          name: courseEditor.name.trim(),
+          tees: courseEditor.tees.map(t=>({...t, label: t.label.trim()}))
+        };
+        await saveCourseToStorage(fullCourse);
+        courseEditor = null;
+        render();
+      };
+      const cancelBtn = document.getElementById('cancelCourseEditorBtn');
+      if(cancelBtn) cancelBtn.onclick = ()=>{ courseEditor = null; render(); };
+      return;
+    }
+    const addCourse = document.getElementById('addCourseBtn');
+    if(addCourse) addCourse.onclick = ()=>{
+      courseEditor = {id:null, name:'', tees:[{id:'tee-'+Date.now(), label:'', holes: blankCourseHoles()}]};
+      render();
+    };
+    document.querySelectorAll('[data-editcourse]').forEach(b=>b.onclick = async ()=>{
+      try{
+        const res = await window.storage.get('course:'+b.dataset.editcourse);
+        if(res && res.value) courseEditor = JSON.parse(res.value);
+        render();
+      }catch(e){ console.error('failed to load course', e); }
+    });
+    document.querySelectorAll('[data-delcourse]').forEach(b=>b.onclick = (e)=>{
+      e.stopPropagation();
+      deleteCourse(b.dataset.delcourse);
+    });
+    return;
+  }
+
+  if(activeTab!=='round' || roundStartStep) return;
+
+  const h = round.holes[currentHole];
+
+  const prevBtn = document.getElementById('prevHole');
+  if(prevBtn) prevBtn.onclick = ()=>{ if(currentHole>0){currentHole--; render();} };
+  const nextBtn = document.getElementById('nextHole');
+  if(nextBtn) nextBtn.onclick = ()=>{ if(currentHole<17){currentHole++; render();} };
+
+  document.getElementById('scoreUp').onclick = ()=>{ h.score = Math.min(h.score+1,12); roundInProgress=true; render(); };
+  document.getElementById('scoreDown').onclick = ()=>{ h.score = Math.max(h.score-1,1); roundInProgress=true; render(); };
+
+  document.querySelectorAll('#parRow button').forEach(b=>b.onclick=()=>{
+    h.par = Number(b.dataset.par);
+    if(h.par===3){ h.fir=null; }
+    roundInProgress=true;
+    render();
+  });
+  const firRow = document.getElementById('firRow');
+  if(firRow) firRow.querySelectorAll('button').forEach(b=>b.onclick=()=>{ h.fir = b.dataset.fir; roundInProgress=true; render(); });
+
+  document.querySelectorAll('#approachRow button').forEach(b=>b.onclick=()=>{ h.approach = b.dataset.approach; roundInProgress=true; render(); });
+
+  const ayInput = document.getElementById('approachYardsInput');
+  if(ayInput) ayInput.onchange = e => {
+    const v = Number(e.target.value);
+    h.approachYards = e.target.value==='' ? null : v;
+    if(h.approachYards!=null) h.approach = approachBucketFromYards(h.approachYards);
+    roundInProgress=true;
+    render();
+  };
+  const getClubBtn = document.getElementById('getClubBtn');
+  if(getClubBtn) getClubBtn.onclick = ()=>{ caddieOpenHole = currentHole; render(); };
+  const closeInline = document.getElementById('closeInlineCaddie');
+  if(closeInline) closeInline.onclick = ()=>{ caddieOpenHole = null; render(); };
+  document.querySelectorAll('[data-inlielie]').forEach(b=>b.onclick=()=>{ shot.lie=b.dataset.inlielie; render(); });
+  document.querySelectorAll('[data-inlietrouble]').forEach(b=>b.onclick=()=>{ shot.trouble=b.dataset.inlietrouble; render(); });
+  document.querySelectorAll('[data-userec]').forEach(b=>b.onclick=()=>{
+    const recs = recommendClubs(shot);
+    const r = recs[Number(b.dataset.userec)];
+    if(r){
+      h.club = r.club.name;
+      h.recClub = r.club.name;
+      h.recSwing = r.swing.label;
+      h.followedRec = true;
+    }
+    caddieOpenHole = null;
+    roundInProgress = true;
+    render();
+  });
+
+  const blowupRow = document.getElementById('blowupRow');
+  if(blowupRow) blowupRow.querySelectorAll('button').forEach(b=>b.onclick=()=>{ h.blowup = b.dataset.blowup; roundInProgress=true; render(); });
+
+  const clubSelect = document.getElementById('clubSelect');
+  if(clubSelect) clubSelect.onchange = e => {
+    h.club = e.target.value;
+    if(h.recClub){ h.followedRec = (e.target.value === h.recClub); }
+    roundInProgress=true;
+  };
+
+  document.querySelectorAll('#girRow button').forEach(b=>b.onclick=()=>{
+    h.gir = b.dataset.gir;
+    if(h.gir==='hit') h.ud=null;
+    roundInProgress=true;
+    render();
+  });
+  const udRow = document.getElementById('udRow');
+  if(udRow) udRow.querySelectorAll('button').forEach(b=>b.onclick=()=>{ h.ud = b.dataset.ud; roundInProgress=true; render(); });
+
+  document.querySelectorAll('#puttsRow button').forEach(b=>b.onclick=()=>{ h.putts = Number(b.dataset.putts); roundInProgress=true; render(); });
+  const puttDistRow = document.getElementById('puttDistRow');
+  if(puttDistRow) puttDistRow.querySelectorAll('button').forEach(b=>b.onclick=()=>{ h.puttDist = b.dataset.puttdist; roundInProgress=true; render(); });
+
+  document.querySelectorAll('[data-jump]').forEach(row=>row.onclick=()=>{ currentHole = Number(row.dataset.jump); caddieOpenHole=null; render(); });
+
+  const saveBtn = document.getElementById('saveRoundBtn');
+  if(saveBtn) saveBtn.onclick = async ()=>{
+    const stats = computeStats(round);
+    const id = Date.now().toString();
+    const summary = {
+      id, course: round.course, date: round.date, slope: round.slope, rating: round.rating,
+      courseId: round.courseId,
+      score: stats.totalScore, toPar: stats.toPar,
+      girPct: stats.girPct, puttsAvg: stats.puttsAvg
+    };
+    saveBtn.textContent = 'Saving…';
+    await saveRoundToStorage(summary, round);
+
+    // Freeform rounds (no saved course tied to them) already have par for
+    // every hole entered — offer to turn that into a reusable course template.
+    const offerCourseSave = !round.courseId;
+    const prefillName = round.course;
+    const prefillHoles = round.holes.map(hh=>({par:hh.par, yardage:null}));
+
+    round = newRound();
+    currentHole = 0;
+    caddieOpenHole = null;
+    roundInProgress = false;
+
+    if(offerCourseSave && confirm('Save this course\'s pars for next time?')){
+      courseEditor = {id:null, name: prefillName, tees:[{id:'tee-'+Date.now(), label:'', holes: prefillHoles}]};
+      activeTab = 'courses';
+    } else {
+      activeTab = 'home';
+    }
+    render();
+    await refreshFocus();
+    render();
+  };
+}
+
+loadHistory();
+
+if('serviceWorker' in navigator){
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js', {updateViaCache:'none'})
+      .then(reg => console.log('Round Log SW registered:', reg.scope))
+      .catch(err => console.warn('Round Log SW registration failed:', err));
+  });
+}
+</script>
+</body>
+</html>
