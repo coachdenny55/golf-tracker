@@ -28,6 +28,9 @@
     --gold:#A6822F;
     --gold-pale:#EFE4C4;
     --radius:10px;
+    --turf-green:#CFE3A6; --turf-green-edge:#9FBE74;
+    --turf-fairway:#A9C486; --turf-fairway-edge:#8AAB69; --turf-fairway-stripe:#B7D093;
+    --turf-rough:#5B7A4C; --turf-tee:#EFE4C4;
   }
   *{box-sizing:border-box;}
   body{
@@ -423,6 +426,108 @@
     cursor:pointer;margin-top:10px;
   }
 
+  /* ---- Live shot-by-shot tracking (course-tied holes) ---- */
+  .live-hdr{ display:flex; align-items:center; justify-content:space-between; padding:10px 20px 6px; gap:8px; }
+  .live-hdr .lh-arrow{ background:none; border:none; font-size:18px; color:var(--green-deep); padding:2px 6px; cursor:pointer; }
+  .live-hdr .lh-arrow:disabled{ opacity:0.3; }
+  .live-hdr .lh-info{ flex:1; text-align:center; font-family:'Fraunces',serif; font-size:14.5px; font-weight:600; color:var(--green-deep); }
+  .live-hdr .lh-info .lh-yard{ font-family:'IBM Plex Mono',monospace; font-weight:500; font-size:11.5px; color:var(--ink-soft); }
+  .live-hdr .lh-edit{ background:none; border:none; color:var(--ink-soft); font-size:10.5px; text-decoration:underline; cursor:pointer; padding:2px; white-space:nowrap; }
+
+  .diagram-card{
+    border-radius:12px; overflow:hidden; border:1px solid var(--line); margin:0 auto;
+    box-shadow:0 8px 20px -14px rgba(31,61,46,0.4); position:relative; background:var(--turf-rough);
+  }
+  .diagram-card svg{ display:block; width:100%; height:100%; cursor:crosshair; touch-action:none; }
+  .view-fab{
+    position:absolute; top:7px; right:7px; background:rgba(15,25,15,0.55); color:#fff; border:none;
+    border-radius:100px; padding:5px 9px; font-size:10px; font-weight:700; cursor:pointer; backdrop-filter:blur(2px);
+  }
+  .tap-hint{
+    position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); pointer-events:none; text-align:center;
+    color:#fff; text-shadow:0 2px 8px rgba(0,0,0,0.55); font-size:12px; font-weight:600; opacity:0.92; width:80%;
+  }
+  .drag-ring{
+    position:absolute; left:0; top:0; width:46px; height:46px; margin:-23px 0 0 -23px;
+    border-radius:50%; border:2px solid rgba(255,255,255,0.9); box-shadow:0 0 0 1.5px rgba(0,0,0,0.35), 0 2px 8px rgba(0,0,0,0.3);
+    pointer-events:none; display:none; z-index:4;
+  }
+  .drag-ring.on{ display:block; }
+  .drag-ring::after{
+    content:""; position:absolute; left:50%; top:50%; width:8px; height:8px; margin:-4px 0 0 -4px;
+    border-radius:50%; background:var(--gold); box-shadow:0 0 0 1px rgba(0,0,0,0.45);
+  }
+  .drag-tooltip{
+    position:absolute; left:0; top:0; pointer-events:none; background:rgba(15,25,18,0.92); color:#fff;
+    border-radius:10px; padding:7px 10px; white-space:nowrap; box-shadow:0 8px 20px -6px rgba(0,0,0,0.55);
+    display:none; z-index:5;
+  }
+  .drag-tooltip.on{ display:block; }
+  .drag-tooltip.above{ transform:translate(-50%,-100%); }
+  .drag-tooltip.below{ transform:translate(-50%,0); }
+  .drag-tooltip.above::after{
+    content:""; position:absolute; left:50%; bottom:-6px; width:0; height:0; margin-left:-6px;
+    border-left:6px solid transparent; border-right:6px solid transparent; border-top:6px solid rgba(15,25,18,0.92);
+  }
+  .drag-tooltip.below::after{
+    content:""; position:absolute; left:50%; top:-6px; width:0; height:0; margin-left:-6px;
+    border-left:6px solid transparent; border-right:6px solid transparent; border-bottom:6px solid rgba(15,25,18,0.92);
+  }
+  .drag-tooltip .dt-main{ font-family:'IBM Plex Mono',monospace; font-size:15px; font-weight:700; line-height:1.2; }
+  .drag-tooltip .dt-main .dt-lie{ font-family:'Inter',sans-serif; font-size:10px; font-weight:700; margin-left:5px; padding:1px 5px; border-radius:100px; background:rgba(255,255,255,0.18); vertical-align:1px; }
+  .drag-tooltip .dt-sub{ font-family:'IBM Plex Mono',monospace; font-size:10.5px; color:rgba(255,255,255,0.75); }
+
+  .live-bottom{ padding:0 20px; display:flex; flex-direction:column; }
+  .caddie-line{
+    flex:0 0 auto; margin-top:10px; padding:9px 11px; border-radius:9px; background:var(--gold-pale);
+    display:flex; align-items:center; gap:8px; border:1px solid #E2CE97;
+  }
+  .caddie-line .cbadge{
+    font-size:9px; letter-spacing:0.07em; text-transform:uppercase; font-weight:700; color:var(--green-deep);
+    background:rgba(31,61,46,0.08); padding:3px 6px; border-radius:5px; flex:0 0 auto;
+  }
+  .caddie-line .ctext{ font-size:12.5px; color:var(--ink); line-height:1.35; }
+  .caddie-line .ctext b{ font-family:'IBM Plex Mono',monospace; }
+
+  .confirm-box{ flex:0 0 auto; margin-top:8px; padding:10px 11px; border-radius:9px; background:var(--paper-raised); border:1px solid var(--line); }
+  .confirm-grid{ display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:8px; }
+  .confirm-stat .cs-label{ font-size:9px; text-transform:uppercase; letter-spacing:.07em; color:var(--ink-soft); margin-bottom:1px; }
+  .confirm-stat .cs-value{ font-family:'IBM Plex Mono',monospace; font-size:15px; font-weight:600; color:var(--green-deep); }
+  .confirm-stat.override input{
+    width:100%; font-family:'IBM Plex Mono',monospace; font-size:15px; font-weight:600; color:var(--green-deep);
+    border:none; border-bottom:1.5px dashed var(--line-strong); background:transparent; padding:0 0 1px;
+  }
+  .confirm-stat.override input:focus{ outline:none; border-color:var(--gold); }
+  .confirm-lie{ display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; font-size:11.5px; }
+  .lie-chip{ display:inline-block; font-size:10.5px; font-weight:700; padding:2px 7px; border-radius:100px; }
+  .club-chip-row{ display:flex; gap:5px; flex-wrap:wrap; margin-bottom:8px; }
+  .club-chip{
+    flex:0 0 auto; border:1px solid var(--line-strong); background:var(--paper); color:var(--ink);
+    font-size:11px; font-weight:600; padding:5px 8px; border-radius:100px; cursor:pointer;
+  }
+  .club-chip.sel{ background:var(--green-deep); border-color:var(--green-deep); color:var(--paper-raised); }
+  .log-btn{
+    width:100%; background:var(--green-deep); color:var(--paper-raised); border:none; border-radius:8px;
+    padding:10px; font-size:13px; font-weight:700; letter-spacing:0.02em; cursor:pointer;
+  }
+
+  .shot-log{ flex:1 1 auto; min-height:0; margin-top:8px; display:flex; flex-direction:column; }
+  .shot-log .sl-title{ flex:0 0 auto; font-size:9.5px; text-transform:uppercase; letter-spacing:.07em; color:var(--ink-soft); font-weight:700; margin-bottom:4px; }
+  .shot-log-list{ flex:1 1 auto; min-height:0; overflow-y:auto; border-top:1px solid var(--line); }
+  .shot-row{ display:flex; align-items:center; gap:7px; padding:6px 0; border-bottom:1px solid var(--line); font-size:12px; }
+  .shot-row .sn{
+    width:16px; height:16px; border-radius:50%; background:var(--green-deep); color:var(--paper-raised);
+    font-size:9px; font-weight:700; display:flex; align-items:center; justify-content:center; flex:0 0 auto;
+  }
+  .shot-row .sclub{ flex:1 1 auto; font-weight:600; }
+  .shot-row .sdist{ font-family:'IBM Plex Mono',monospace; color:var(--ink-soft); flex:0 0 auto; }
+  .shot-row .slie{ font-size:10px; color:var(--ink-soft); flex:0 0 auto; }
+  .empty-log{ font-size:11.5px; color:var(--ink-soft); font-style:italic; padding:5px 0; }
+
+  .quick-mode-link{ display:block; text-align:center; margin:10px 20px 0; font-size:11.5px; color:var(--ink-soft); text-decoration:underline; cursor:pointer; background:none; border:none; }
+  .setup-preview{ border-radius:12px; overflow:hidden; border:1px solid var(--line); margin:4px 0 14px; background:var(--turf-rough); max-width:260px; margin-left:auto; margin-right:auto; }
+  .setup-preview svg{ display:block; width:100%; height:auto; }
+
   /* Ledger table */
   .ledger-wrap{padding:8px 20px 4px;overflow-x:auto;}
   table.ledger{
@@ -616,7 +721,7 @@
 <script>
 const CLUBS = ["Driver","Fairway Wood","Hybrid","Long Iron (3-5)","Mid Iron (6-7)","Short Iron (8-9)","Wedge"];
 const APPROACH_RANGES = ["<50","50-100","100-150","150-200","200+"];
-const APP_VERSION = '1.8';
+const APP_VERSION = '2.1';
 
 function blankHole(par){
   return {
@@ -624,15 +729,34 @@ function blankHole(par){
     club:null, gir:null, ud:null, putts:2, puttDist:null,
     blowup:null, recClub:null, recSwing:null, followedRec:null,
     girMissDist:null, girMissDir:null, girTap:null, girMissSeverity:null, approachLie:null,
-    firMissDir:null, firTap:null, firMissSeverity:null, teeClub:null
+    firMissDir:null, firTap:null, firMissSeverity:null, teeClub:null,
+    // Shot-by-shot log for course-tied rounds (see buildHole/renderLiveHoleView).
+    // {club, xh, yh, lie, distYards, remainYards} per shot, tee to green. When
+    // this is non-empty, deriveHoleSummaryFields() keeps the fields above in
+    // sync so every existing insight/ledger/spray-chart still works unchanged.
+    // Freeform rounds never populate this — they keep the tap-diagram flow.
+    shots: [],
+    quickMode: false, // pace-of-play escape hatch: score+putts only, skip shot detail
+    setupDone: false  // true once par/yardage/shape are confirmed for this hole — gates renderHoleSetupView
   };
 }
 function newRound(){
   return {course:"", date: new Date().toISOString().slice(0,10), slope:"", rating:"", courseId:null, teeId:null, holes: Array.from({length:18},()=>blankHole(4))};
 }
 function blankCourseHoles(){
-  return Array.from({length:18},()=>({par:4, yardage:null}));
+  return Array.from({length:18},()=>({par:4, yardage:null, shape:null}));
 }
+// Fairway shape templates for the on-course tap diagram. Par 3 always plays
+// 'straight' (tee shot goes right at the green, no dogleg concept applies);
+// par 4/5 pick any of these five, rendered at whatever yardage the hole is.
+const HOLE_SHAPES = {
+  straight:  { label:'Straight',          style:'straight' },
+  dogleg_l:  { label:'Dogleg Left',        style:'corner', dir:-1, turnAngleDeg:38, cornerT:0.56, blendYards:26 },
+  dogleg_r:  { label:'Dogleg Right',       style:'corner', dir: 1, turnAngleDeg:38, cornerT:0.56, blendYards:26 },
+  bend_l:    { label:'Slight Bend Left',   style:'sweep',  dir:-1, bendYards:55 },
+  bend_r:    { label:'Slight Bend Right',  style:'sweep',  dir: 1, bendYards:55 }
+};
+const HOLE_SHAPE_ORDER = ['straight','dogleg_l','dogleg_r','bend_l','bend_r'];
 function girMissAbbrev(h){
   const dist = {short:'S', long:'Lg'}[h.girMissDist||''] || '';
   const dir = {left:'L', right:'R'}[h.girMissDir||''] || '';
@@ -754,6 +878,153 @@ function renderFairwayDiagram(id, opts){
     </svg>
   `;
 }
+// ---------- Whole-hole shape diagrams (course-tied rounds) ----------
+// A second, separate diagram system from the bullseye/corridor taps above,
+// which stay exactly as they were for freeform rounds. This one draws the
+// hole's actual chosen shape (see HOLE_SHAPES) tee-to-green and is shared by
+// the hole-setup preview and the live shot-by-shot tracking screen.
+const HOLE_CANVAS_PAD = 30;        // yards of tap-room kept clear beyond the fairway's own footprint, on every side
+const HOLE_MIN_CANVAS_WIDTH = 150; // even a straight hole gets at least this much lateral room
+const HOLE_MARGIN_TEE = 14;        // room shown below the tee marker
+const HOLE_MARGIN_GREEN = 38;      // room shown PAST the green, in case of a long hit through it
+const HOLE_DISTANCE_MARKERS = [250,200,150,100];
+
+function holeSmoothstep(t){ return t*t*(3-2*t); }
+function holeCenterlineX(yh, yardage, shape){
+  if(shape.style==='straight') return 0;
+  if(shape.style==='corner'){
+    const cornerY = shape.cornerT*yardage;
+    const half = shape.blendYards/2;
+    const slope = Math.tan(shape.turnAngleDeg*Math.PI/180) * shape.dir;
+    if(yh<=cornerY-half) return 0;
+    if(yh>=cornerY+half) return (yh-cornerY)*slope;
+    const u = (yh-(cornerY-half))/(2*half);
+    return holeSmoothstep(u) * (half*slope);
+  }
+  if(shape.style==='sweep') return shape.dir*shape.bendYards*holeSmoothstep(yh/yardage);
+  return 0;
+}
+function holeCorridorWidth(t, isPar3){
+  const wMin = isPar3? 23:30, wMax = isPar3? 31:51;
+  const tc = Math.min(Math.max(t,0.045),0.955);
+  return wMin + (wMax-wMin)*Math.pow(Math.sin(Math.PI*tc), 0.68);
+}
+// Builds the fairway polygon, green/tee position, a sampled centerline (for
+// lie lookups), and an adaptive viewBox padded on BOTH sides of wherever the
+// fairway actually ends up — a hard dogleg needs real room on the corner
+// side, but also on the "wrong" side for a big miss, regardless of which way
+// it turns.
+function buildHoleLayout(shapeId, yardage, isPar3){
+  const shape = HOLE_SHAPES[shapeId] || HOLE_SHAPES.straight;
+  const totalH = yardage + HOLE_MARGIN_TEE + HOLE_MARGIN_GREEN;
+  const svgY = yh => totalH - HOLE_MARGIN_TEE - yh;
+  const N = 64;
+  const samples = [];
+  const left = [], right = [];
+  let minX = Infinity, maxX = -Infinity;
+  for(let i=0;i<=N;i++){
+    const t = i/N;
+    const yh = t*yardage;
+    const cx = holeCenterlineX(yh, yardage, shape);
+    const w = holeCorridorWidth(t, isPar3);
+    samples.push({t, yh, cx, w});
+    const l = cx-w/2, r = cx+w/2;
+    left.push(`${l.toFixed(2)},${svgY(yh).toFixed(2)}`);
+    right.push(`${r.toFixed(2)},${svgY(yh).toFixed(2)}`);
+    if(l<minX) minX=l;
+    if(r>maxX) maxX=r;
+  }
+  const fairwayD = `M${left.join('L')}L${right.reverse().join('L')}Z`;
+  const greenCx = holeCenterlineX(yardage, yardage, shape);
+  const greenY = svgY(yardage);
+  minX = Math.min(minX, greenCx-GREEN_RADIUS_YARDS);
+  maxX = Math.max(maxX, greenCx+GREEN_RADIUS_YARDS);
+  const teeCx = 0, teeY = svgY(0);
+  let viewMinX = minX-HOLE_CANVAS_PAD, viewMaxX = maxX+HOLE_CANVAS_PAD;
+  const rawW = viewMaxX-viewMinX;
+  if(rawW < HOLE_MIN_CANVAS_WIDTH){
+    const extra = (HOLE_MIN_CANVAS_WIDTH-rawW)/2;
+    viewMinX -= extra; viewMaxX += extra;
+  }
+  return { shapeId, shape, isPar3, totalH, svgY, samples, fairwayD, greenCx, greenY, teeCx, teeY, yardage, viewMinX, viewMaxX };
+}
+function nearestHoleLie(hole, xh, yh){
+  let best=null, bestD=Infinity;
+  for(const s of hole.samples){
+    const d = Math.abs(s.yh - yh);
+    if(d<bestD){ bestD=d; best=s; }
+  }
+  if(!best) return {lie:'Fairway', lateral:0};
+  const lateral = xh - best.cx;
+  const half = best.w/2;
+  const a = Math.abs(lateral);
+  let lie;
+  if(a<=half) lie='Fairway';
+  else if(a<=half+11) lie='First cut';
+  else lie='Rough';
+  return {lie, lateral};
+}
+// Classifies a tapped shot position against the whole hole: which LIES id it
+// landed in (or 'green' if it reached the putting surface), plus a near/bad
+// severity relative to the green — used by deriveHoleSummaryFields to keep
+// the existing GIR/FIR/lie insight fields populated from shots[].
+function classifyHoleShot(hole, xh, yh){
+  const distToGreen = Math.sqrt((xh-hole.greenCx)**2 + (yh-hole.yardage)**2);
+  const onGreen = distToGreen <= GREEN_RADIUS_YARDS;
+  const near = nearestHoleLie(hole, xh, yh);
+  const lieId = onGreen ? 'green' : ({Fairway:'fairway','First cut':'lightrough',Rough:'heavyrough'}[near.lie] || 'heavyrough');
+  const severity = distToGreen<=GREEN_NEAR_MISS_YARDS ? 'near' : 'bad';
+  return { lieId, onGreen, distToGreen, lateral:near.lateral };
+}
+function holeDistanceRingsSvg(hole){
+  return HOLE_DISTANCE_MARKERS.filter(d => d < hole.yardage-10 && d > GREEN_NEAR_MISS_YARDS+8).map(d=>{
+    const labelYh = Math.max(0, hole.yardage-d);
+    const lx = holeCenterlineX(labelYh, hole.yardage, hole.shape);
+    const ly = hole.svgY(labelYh);
+    return `<circle cx="${hole.greenCx}" cy="${hole.greenY}" r="${d}" fill="none" stroke="rgba(255,255,255,0.4)" stroke-width="0.3" stroke-dasharray="1.1,2.4"/>
+      <text x="${lx.toFixed(1)}" y="${(ly+1.4).toFixed(1)}" text-anchor="middle" font-size="4.4" font-family="IBM Plex Mono, monospace" font-weight="700" fill="rgba(255,255,255,0.85)" style="paint-order:stroke; stroke:rgba(20,30,20,0.45); stroke-width:0.9; stroke-linejoin:round;">${d}</text>`;
+  }).join('');
+}
+// opts: {id, viewBox, shots:[{xh,yh}], pending:{xh,yh}|null, small:bool}
+function renderHoleShapeSvg(hole, opts){
+  opts = opts || {};
+  const vb = opts.viewBox || `${hole.viewMinX} 0 ${hole.viewMaxX-hole.viewMinX} ${hole.totalH}`;
+  const sw = opts.small ? 1.1 : 0.55;
+  const stripes = [];
+  if(!opts.small){
+    for(let i=1;i<9;i++){
+      const t=i/9, yh=t*hole.yardage, y=hole.svgY(yh);
+      if(i%2===0) stripes.push(`<rect x="${hole.viewMinX}" y="${(y-hole.yardage/9/2).toFixed(1)}" width="${hole.viewMaxX-hole.viewMinX}" height="${(hole.yardage/9).toFixed(1)}" fill="var(--turf-fairway-stripe)" opacity="0.45"/>`);
+    }
+  }
+  const shots = (opts.shots||[]).map((s,i)=>{
+    const y = hole.svgY(s.yh);
+    return `<circle cx="${s.xh.toFixed(2)}" cy="${y.toFixed(2)}" r="${opts.small?2.6:2.3}" fill="var(--green-deep)" stroke="#fff" stroke-width="${opts.small?0.6:0.55}"/>
+      ${opts.small?'':`<text x="${s.xh.toFixed(2)}" y="${(y-3.4).toFixed(2)}" text-anchor="middle" font-size="4" font-family="IBM Plex Mono, monospace" fill="var(--ink)" font-weight="700">${i+1}</text>`}`;
+  }).join('');
+  const pendingPos = opts.pending || {xh:0, yh:0};
+  const pendingDot = opts.small ? '' : `<circle id="${opts.id}-pendingMarker" cx="${pendingPos.xh.toFixed(2)}" cy="${hole.svgY(pendingPos.yh).toFixed(2)}" r="3.1" fill="var(--gold)" stroke="#fff" stroke-width="0.7" opacity="${opts.pending?1:0}"/>`;
+
+  return `<svg id="${opts.id}" viewBox="${vb}" preserveAspectRatio="xMidYMid slice" style="background:var(--turf-rough);display:block;width:100%;height:100%;">
+    <defs><clipPath id="fw-${opts.id}"><path d="${hole.fairwayD}"/></clipPath></defs>
+    <path d="${hole.fairwayD}" fill="var(--turf-fairway)"/>
+    <g clip-path="url(#fw-${opts.id})">${stripes.join('')}</g>
+    <path d="${hole.fairwayD}" fill="none" stroke="var(--turf-fairway-edge)" stroke-width="${sw}"/>
+    ${opts.small?'':holeDistanceRingsSvg(hole)}
+    ${opts.small?'':`<circle cx="${hole.greenCx}" cy="${hole.greenY}" r="${GREEN_NEAR_MISS_YARDS}" fill="none" stroke="rgba(255,255,255,0.5)" stroke-dasharray="1.4,1.6" stroke-width="0.35"/>`}
+    <ellipse cx="${hole.greenCx}" cy="${hole.greenY}" rx="${GREEN_RADIUS_YARDS}" ry="${GREEN_RADIUS_YARDS*0.86}" fill="var(--turf-green)" stroke="var(--turf-green-edge)" stroke-width="${sw}"/>
+    <g transform="translate(${hole.greenCx},${hole.greenY})">
+      <line x1="0" y1="0" x2="0" y2="${-GREEN_RADIUS_YARDS*0.62}" stroke="var(--ink)" stroke-width="${sw*0.9}"/>
+      <path d="M0,${-GREEN_RADIUS_YARDS*0.62} l${GREEN_RADIUS_YARDS*0.42},${GREEN_RADIUS_YARDS*0.16} l${-GREEN_RADIUS_YARDS*0.42},${GREEN_RADIUS_YARDS*0.16}z" fill="var(--gold)"/>
+    </g>
+    <g transform="translate(${hole.teeCx},${hole.teeY})">
+      <rect x="-3.6" y="-1.3" width="7.2" height="2.6" rx="1.2" fill="var(--turf-tee)" stroke="var(--turf-fairway-edge)" stroke-width="${sw*0.7}"/>
+    </g>
+    ${shots}
+    ${pendingDot}
+  </svg>`;
+}
+
 function approachBucketFromYards(y){
   if(y==null || isNaN(y)) return null;
   if(y<50) return "<50";
@@ -794,6 +1065,59 @@ function defaultTeeClubForHole(idx){
     if(round.holes[i] && round.holes[i].teeClub) return round.holes[i].teeClub;
   }
   return null;
+}
+
+// Keeps the pre-existing summary fields (fir/gir/teeClub/club/approachLie/
+// girTap/etc.) in sync with the new shots[] log on a course-tied hole, so
+// every existing insight, the ledger, and the spray charts keep reading
+// exactly what they already expect — shots[] is the detailed record, this
+// is the same "headline" shape everything else was already built against.
+function deriveHoleSummaryFields(h){
+  if(!h.shape || !h.shots || !h.shots.length) return;
+  const hole = buildHoleLayout(h.shape, h.refYardage, h.par===3);
+
+  if(h.par!==3){
+    const t = h.shots[0];
+    const c = classifyHoleShot(hole, t.xh, t.yh);
+    h.teeClub = t.club;
+    h.fir = c.onGreen || c.lieId==='fairway' ? 'hit' : 'miss';
+    if(h.fir==='miss'){
+      h.firMissDir = t.xh >= 0 ? 'right' : 'left'; // fairway miss has no "center" — matches the original classifyFairwayTap
+      h.firMissSeverity = c.severity;
+    } else { h.firMissDir=null; h.firMissSeverity=null; }
+  }
+
+  // The approach is whichever shot first reaches the green, or the most
+  // recent shot logged if none has gotten there yet.
+  let approachShot = null, approachIdx = -1;
+  for(let i=0;i<h.shots.length;i++){
+    if(classifyHoleShot(hole, h.shots[i].xh, h.shots[i].yh).onGreen){ approachShot = h.shots[i]; approachIdx = i; break; }
+  }
+  if(!approachShot){ approachIdx = h.shots.length-1; approachShot = h.shots[approachIdx]; }
+  const ac = classifyHoleShot(hole, approachShot.xh, approachShot.yh);
+
+  h.club = approachShot.club;
+  h.gir = ac.onGreen ? 'hit' : 'miss';
+  h.girTap = { long: approachShot.yh-hole.yardage, lateral: approachShot.xh-hole.greenCx };
+  if(h.gir==='miss'){
+    h.girMissDir = h.girTap.lateral>3 ? 'right' : h.girTap.lateral<-3 ? 'left' : 'center';
+    h.girMissDist = h.girTap.long>3 ? 'long' : h.girTap.long<-3 ? 'short' : 'pin';
+    h.girMissSeverity = ac.severity;
+    h.ud = h.ud===undefined ? null : h.ud;
+  } else {
+    h.girMissDir=null; h.girMissDist=null; h.girMissSeverity=null; h.ud=null;
+    h.puttDist = inferFirstPuttDist(h);
+  }
+
+  const origin = approachIdx>0 ? h.shots[approachIdx-1] : {xh:0, yh:0};
+  if(approachIdx>0){
+    h.approachLie = classifyHoleShot(hole, origin.xh, origin.yh).lieId;
+  } else {
+    h.approachLie = h.par===3 ? 'tee' : 'fairway';
+  }
+  const remainAtOrigin = Math.sqrt((origin.xh-hole.greenCx)**2 + (origin.yh-hole.yardage)**2);
+  h.approachYards = Math.round(remainAtOrigin);
+  h.approach = approachBucketFromYards(h.approachYards);
 }
 
 // ---------- Bag & Caddie model ----------
@@ -1579,6 +1903,12 @@ let sprayFilterClub = 'all';
 let sprayFilterApproach = 'all';
 let sprayFairwayFilterClub = 'all';
 
+// ---------- Live shot-by-shot tracking (course-tied holes only) ----------
+let liveShotPending = null;      // {xh,yh}|null — an uncommitted tap, waiting on "Log this shot"
+let liveShotClub = null;         // club id currently selected in the confirm box, overriding the top recommendation
+let liveView = 'whole';          // 'whole' | 'green' — which window the diagram shows
+let liveViewHoleIdx = null;      // which hole liveView/pending state belongs to, so switching holes resets it
+
 const app = document.getElementById('app');
 
 // ---------- IndexedDB-backed storage (matches the artifact window.storage shape) ----------
@@ -2260,7 +2590,7 @@ function renderTeeHolesTable(ti, holes, start, end, label){
   return `
     <div class="na-note" style="padding:6px 0 4px;font-style:normal;font-weight:600;color:var(--ink);">${label}</div>
     <table class="ledger">
-      <thead><tr><th>Hole</th><th>Par</th><th>Yardage</th></tr></thead>
+      <thead><tr><th>Hole</th><th>Par</th><th>Yardage</th><th>Shape</th></tr></thead>
       <tbody>
         ${holes.slice(start,end).map((h,offset)=>{
           const hi = start+offset;
@@ -2272,6 +2602,14 @@ function renderTeeHolesTable(ti, holes, start, end, label){
               </select>
             </td>
             <td><input class="mini-input" style="width:74px;" type="number" inputmode="numeric" placeholder="optional" data-holeyardage="${ti}:${hi}" value="${h.yardage!=null?h.yardage:''}"></td>
+            <td>
+              ${h.par===3
+                ? `<span class="na-note" style="padding:0;">Direct</span>`
+                : `<select class="field-select" style="padding:4px;font-size:12px;width:104px;" data-holeshape="${ti}:${hi}">
+                    <option value="">Select</option>
+                    ${HOLE_SHAPE_ORDER.map(id=>`<option value="${id}" ${h.shape===id?'selected':''}>${HOLE_SHAPES[id].label}</option>`).join('')}
+                  </select>`}
+            </td>
           </tr>`;
         }).join('')}
       </tbody>
@@ -2304,7 +2642,7 @@ function renderCourseEditorView(){
       `).join('')}
 
       <button class="log-practice-btn" id="addTeeSetBtn" style="margin-bottom:14px;">+ Add Tee Set</button>
-      <div class="na-note">Par is required (defaults to 4) — tee markers move day to day, but par doesn't. Yardage is optional; leave any hole blank if you'd rather skip it.</div>
+      <div class="na-note">Par is required (defaults to 4) — tee markers move day to day, but par doesn't. Yardage is optional; leave any hole blank if you'd rather skip it. Set Shape on a hole to unlock the live tap-tracking flow for it during a round — holes left blank fall back to the simpler entry.</div>
 
       <button class="finish-btn" id="saveCourseBtn">Save Course</button>
       <button class="save-btn" id="cancelCourseEditorBtn" style="background:var(--paper-raised);color:var(--ink-soft);border:1px solid var(--line-strong);margin-top:8px;">Cancel</button>
@@ -2601,8 +2939,322 @@ function renderHomeView(){
   `;
 }
 
+const LIVE_BOTTOM_SECTION_H = 240; // caddie-line + confirm-box(max) + shot-log, fixed
+const LIVE_MAX_DIAGRAM_H = 400;
+// Rough allowance for the chrome above/below renderRoundView's own content —
+// the masthead + tab bar (~160px) plus this view's own header/gaps — used to
+// size the diagram off the real window height. Worth rechecking on an actual
+// device: unlike the diagram's own math (verified exactly), this specific
+// number is an estimate, not a measurement.
+const LIVE_CHROME_ESTIMATE = 160;
+
+function currentLiveOrigin(h){
+  if(!h.shots.length) return {xh:0, yh:0};
+  return h.shots[h.shots.length-1];
+}
+function liveClubLabel(id){
+  const c = bag.find(x=>x.id===id);
+  return c ? c.name : id;
+}
+function liveLieLabel(lieId){
+  if(lieId==='green') return 'On the green';
+  if(lieId==='tee') return 'Tee';
+  const l = LIES.find(x=>x.id===lieId);
+  return l ? l.label : lieId;
+}
+function liveLieColor(lieId){
+  if(lieId==='fairway' || lieId==='tee') return {bg:'var(--turf-fairway)', fg:'#26361a'};
+  if(lieId==='green') return {bg:'var(--turf-green)', fg:'#26361a'};
+  if(lieId==='lightrough') return {bg:'var(--gold-pale)', fg:'#26361a'};
+  return {bg:'var(--turf-rough)', fg:'#fff'};
+}
+
+const SETUP_DEFAULT_YARDAGE = {3:155, 4:400, 5:530};
+
+// Shown when you arrive at a hole that hasn't been set up yet — no shape
+// picked (freeform rounds, or a course hole nobody configured), no shots
+// logged, and quick-entry hasn't been chosen. A course-tied hole that
+// already has a shape skips this entirely (see round-start and
+// data-starttee wiring, which set setupDone straight to true there).
+function renderHoleSetupView(h, stats){
+  if(h.par===3){ h.shape = 'straight'; }
+  else if(!h.shape){ h.shape = 'straight'; } // sensible pre-pick so "Start This Hole" works with zero taps if you're happy with it
+
+  return `
+    <div class="live-hdr">
+      <button class="lh-arrow" id="prevHole" ${currentHole===0?'disabled':''}>&#8592;</button>
+      <div class="lh-info">Hole ${currentHole+1} Setup</div>
+      <button class="lh-arrow" id="nextHole" ${currentHole===17?'disabled':''}>&#8594;</button>
+    </div>
+    <section style="padding-top:4px;">
+      <div class="field">
+        <span class="field-label">Par</span>
+        <div class="btn-row" id="setupParRow">
+          ${[3,4,5].map(p=>`<button data-setuppar="${p}" class="${h.par===p?'sel':''}">${p}</button>`).join('')}
+        </div>
+      </div>
+      <div class="field">
+        <span class="field-label">Yardage</span>
+        <input class="mini-input" id="setupYardageInput" type="number" inputmode="numeric" placeholder="e.g. ${SETUP_DEFAULT_YARDAGE[h.par]}" value="${h.refYardage!=null?h.refYardage:''}" style="text-align:left;padding-left:12px;">
+      </div>
+      ${h.par!==3 ? `
+      <div class="field">
+        <span class="field-label">Shape</span>
+        <div class="btn-row" id="setupShapeRow" style="flex-wrap:wrap;">
+          ${HOLE_SHAPE_ORDER.map(id=>`<button data-setupshape="${id}" class="${h.shape===id?'sel':''}" style="flex:0 0 auto;padding:7px 9px;font-size:11.5px;">${HOLE_SHAPES[id].label}</button>`).join('')}
+        </div>
+      </div>` : `<div class="na-note">Par 3 — tee shot goes straight at the green, no shape to pick.</div>`}
+      <div class="setup-preview">${renderHoleShapeSvg(buildHoleLayout(h.shape, h.refYardage||SETUP_DEFAULT_YARDAGE[h.par], h.par===3), {id:'setupPreviewSvg'})}</div>
+      <button class="finish-btn" id="startHoleBtn">Start This Hole</button>
+      <button class="save-btn" id="setupQuickBtn" style="background:var(--paper-raised);color:var(--ink-soft);border:1px solid var(--line-strong);margin-top:8px;">Quick Entry Instead (score &amp; putts only)</button>
+    </section>
+  `;
+}
+
+function renderLiveHoleView(h, stats){
+  deriveHoleSummaryFields(h);
+  const hole = buildHoleLayout(h.shape, h.refYardage, h.par===3);
+
+  const header = `
+    <div class="live-hdr">
+      <button class="lh-arrow" id="prevHole" ${currentHole===0?'disabled':''}>&#8592;</button>
+      <div class="lh-info">Hole ${currentHole+1} <span class="lh-yard">· Par ${h.par}${h.refYardage!=null?` · ${h.refYardage}y`:''}</span></div>
+      <button class="lh-arrow" id="nextHole" ${currentHole===17?'disabled':''}>&#8594;</button>
+    </div>
+    <div style="display:flex;justify-content:center;gap:14px;margin:-2px 0 4px;flex-wrap:wrap;">
+      ${h.shots.length ? `<button class="quick-mode-link" style="margin:0;" id="resetShotsBtn">Reset shots</button>` : ``}
+      <button class="quick-mode-link" style="margin:0;" id="toggleQuickBtn">${h.quickMode ? 'Track shots for this hole' : 'Quick entry instead'}</button>
+      <button class="quick-mode-link" style="margin:0;" id="editHoleSetupBtn">Edit hole setup</button>
+    </div>
+  `;
+
+  if(h.quickMode){
+    return header + `
+      <section style="padding-top:4px;">
+        <div class="score-display">
+          <div style="text-align:center;">
+            <div class="score-shape ${scoreShapeClass(h.score,h.par)}"><div class="core">${h.score}</div></div>
+            <div class="score-caption">${scoreCaption(h.score,h.par)}</div>
+            <div class="score-steppers">
+              <button id="scoreDown">&minus;</button>
+              <button id="scoreUp">&plus;</button>
+            </div>
+          </div>
+        </div>
+        <div class="field">
+          <span class="field-label">Putts</span>
+          <div class="btn-row" id="puttsRow">
+            ${[0,1,2,3,4,5].map(n=>`<button data-putts="${n}" class="${h.putts===n?'sel':''}">${n===5?'5+':n}</button>`).join('')}
+          </div>
+        </div>
+      </section>
+      <div class="ledger-wrap">
+        <table class="ledger">
+          <thead><tr><th>H</th><th>Par</th><th>Score</th><th>FIR</th><th>GIR</th><th>Putts</th></tr></thead>
+          <tbody>
+            ${round.holes.map((hh,i)=>{
+              const diff = hh.score-hh.par;
+              const scoreCls = diff>0?'score-over':(diff<0?'score-under':'');
+              return `<tr class="${i===currentHole?'current-row':''}" data-jump="${i}">
+                <td>${i+1}</td><td>${hh.par}</td>
+                <td class="${scoreCls}">${hh.score}</td>
+                <td>${hh.par===3?'—':(hh.fir==='hit'?'✓':hh.fir==='miss'?`<span title="${hh.firMissDir?('Missed '+hh.firMissDir):'Missed fairway'}" style="${hh.firMissSeverity==='bad'?'color:var(--red);font-weight:600;':''}">${hh.firMissDir==='left'?'L':hh.firMissDir==='right'?'R':'✕'}</span>`:'')}</td>
+                <td>${hh.gir==='hit'?'✓':hh.gir==='miss'?`<span title="${escapeHtml(girMissLabel(hh))}" style="${hh.girMissSeverity==='bad'?'color:var(--red);font-weight:600;':''}">${girMissAbbrev(hh)}</span>`:''}</td>
+                <td>${hh.putts}</td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+      <div class="insights-panel">
+        <h3>What today's numbers say</h3>
+        ${renderInsightsList(stats)}
+      </div>
+      <section><button class="finish-btn" id="saveRoundBtn">Save This Round</button></section>
+    `;
+  }
+
+  const origin = currentLiveOrigin(h);
+  const originLie = h.shots.length ? classifyHoleShot(hole, origin.xh, origin.yh) : {lieId:'tee'};
+  const remainFromOrigin = Math.sqrt((origin.xh-hole.greenCx)**2 + (origin.yh-hole.yardage)**2);
+  const onGreenNow = h.shots.length>0 && originLie.onGreen;
+
+  shot.target = Math.max(1, Math.round(remainFromOrigin));
+  shot.lie = onGreenNow ? 'fairway' : (originLie.lieId==='green' ? 'fairway' : originLie.lieId);
+  const recs = (!onGreenNow && bag.length) ? recommendClubs(shot) : [];
+  if(liveShotPending && !liveShotClub && recs[0]) liveShotClub = recs[0].club.id;
+
+  let caddieHtml;
+  if(onGreenNow){
+    caddieHtml = `<div class="cbadge">On</div><div class="ctext">On the green — putting stays as the simple entry below once you finish this hole.</div>`;
+  } else if(!liveShotPending){
+    const top = recs[0];
+    caddieHtml = top
+      ? `<div class="cbadge">Caddie</div><div class="ctext"><b>${shot.target}y</b> to the pin from ${liveLieLabel(shot.lie).toLowerCase()} — try the <b>${escapeHtml(top.club.name)}</b> (${top.swing.label}). Tap the diagram where it finishes.</div>`
+      : `<div class="cbadge">Caddie</div><div class="ctext"><b>${shot.target}y</b> to the pin. ${bag.length?'':'Add clubs to your bag for a recommendation.'} Tap the diagram where it finishes.</div>`;
+  } else {
+    caddieHtml = `<div class="cbadge">Confirm</div><div class="ctext">Correct the yardage if you've got a precise number, check the club, then log it.</div>`;
+  }
+
+  const chromeH = LIVE_CHROME_ESTIMATE + 120; // + this view's own header/gaps
+  const diagramHeightPx = Math.min(LIVE_MAX_DIAGRAM_H, Math.max(160,
+    (typeof window!=='undefined'?window.innerHeight:700) - chromeH - LIVE_BOTTOM_SECTION_H));
+  const pxPerYard = diagramHeightPx / hole.totalH;
+  const cardWidthPx = (hole.viewMaxX-hole.viewMinX) * pxPerYard;
+
+  let viewBox;
+  if(liveView==='whole'){
+    viewBox = `${hole.viewMinX} 0 ${hole.viewMaxX-hole.viewMinX} ${hole.totalH}`;
+  } else {
+    const gh = 50, gw = gh*(cardWidthPx/diagramHeightPx);
+    viewBox = `${hole.greenCx-gw/2} ${Math.max(hole.greenY-gh*0.4,0)} ${gw} ${gh}`;
+  }
+
+  const shotListHtml = h.shots.length
+    ? h.shots.map((s,i)=>`<div class="shot-row">
+        <div class="sn">${i+1}</div>
+        <div class="sclub">${escapeHtml(liveClubLabel(s.club))}</div>
+        <div class="slie">${liveLieLabel(s.lie)}</div>
+        <div class="sdist">${Math.round(s.distYards)}y</div>
+      </div>`).join('')
+    : `<div class="empty-log">No shots logged yet on this hole.</div>`;
+
+  const confirmHtml = liveShotPending ? (()=>{
+    const distJustHit = Math.sqrt((liveShotPending.xh-origin.xh)**2 + (liveShotPending.yh-origin.yh)**2);
+    const c = classifyHoleShot(hole, liveShotPending.xh, liveShotPending.yh);
+    const remain = Math.sqrt((liveShotPending.xh-hole.greenCx)**2 + (liveShotPending.yh-hole.yardage)**2);
+    const lc = liveLieColor(c.lieId);
+    const chipRecs = recs.length ? recs : (bag.length ? [{club:bag[0]}] : []);
+    return `<div class="confirm-box">
+      <div class="confirm-grid">
+        <div class="confirm-stat">
+          <div class="cs-label">Shot distance</div>
+          <div class="cs-value">${Math.round(distJustHit)}y</div>
+        </div>
+        <div class="confirm-stat override">
+          <div class="cs-label">To pin (override)</div>
+          <input type="number" id="remainOverride" value="${Math.round(remain)}">
+        </div>
+      </div>
+      <div class="confirm-lie">
+        <span class="field-label" style="margin:0;">Lie</span>
+        <span class="lie-chip" style="background:${lc.bg};color:${lc.fg};">${liveLieLabel(c.lieId)}</span>
+      </div>
+      ${chipRecs.length ? `
+      <span class="field-label">Club</span>
+      <div class="club-chip-row">
+        ${chipRecs.map(r=>`<button class="club-chip ${liveShotClub===r.club.id?'sel':''}" data-liveclub="${r.club.id}">${escapeHtml(r.club.name)}</button>`).join('')}
+      </div>` : `<div class="na-note" style="padding:0 0 8px;">No clubs in your bag yet — set up your bag to get club recommendations.</div>`}
+      <button class="log-btn" id="logShotBtn">Log this shot</button>
+    </div>`;
+  })() : '';
+
+  return header + `
+    <div class="diagram-card" id="diagramCard" style="width:${cardWidthPx.toFixed(1)}px;height:${diagramHeightPx.toFixed(1)}px;">
+      ${renderHoleShapeSvg(hole,{id:'liveHoleSvg', viewBox, shots:h.shots, pending:liveShotPending})}
+      <button class="view-fab" id="viewToggleBtn">${liveView==='whole' ? '⤢ Green' : '⤡ Whole'}</button>
+      <div class="drag-ring" id="liveDragRing"></div>
+      <div class="drag-tooltip" id="liveDragTooltip"><div class="dt-main"><span id="liveDtDist">0y</span><span class="dt-lie" id="liveDtLie">Fairway</span></div><div class="dt-sub" id="liveDtRemain">0y to pin</div></div>
+      ${(!h.shots.length && !liveShotPending) ? `<div class="tap-hint">Tap — or press and drag — where your ${h.par===3?'tee shot':(h.shots.length?'next shot':'tee shot')} finished</div>` : ''}
+    </div>
+    <div class="live-bottom">
+      <div class="caddie-line">${caddieHtml}</div>
+      ${confirmHtml}
+      <div class="shot-log">
+        <div class="sl-title">This hole</div>
+        <div class="shot-log-list">${shotListHtml}</div>
+      </div>
+    </div>
+
+    <section style="padding-top:14px;">
+      <div class="score-display">
+        <div style="text-align:center;">
+          <div class="score-shape ${scoreShapeClass(h.score,h.par)}"><div class="core">${h.score}</div></div>
+          <div class="score-caption">${scoreCaption(h.score,h.par)}</div>
+          <div class="score-steppers">
+            <button id="scoreDown">&minus;</button>
+            <button id="scoreUp">&plus;</button>
+          </div>
+        </div>
+      </div>
+
+      ${(h.score-h.par)>=2 ? `
+      <div class="blowup-box">
+        <span class="field-label">What happened on this one?</span>
+        <div class="btn-row" id="blowupRow" style="gap:6px;margin-top:6px;">
+          ${[['penalty','Penalty/OB'],['shortgame','Short Game'],['threeputt','3-Putt'],['teeshot','Tee Shot'],['other','Other']].map(([v,l])=>
+            `<button data-blowup="${v}" class="${h.blowup===v?'sel bad':''}" style="flex:0 0 auto;padding:7px 9px;font-size:11.5px;">${l}</button>`).join('')}
+        </div>
+      </div>` : ``}
+
+      ${h.gir==='miss' ? `
+      <div class="field">
+        <span class="field-label">Up &amp; Down</span>
+        <div class="btn-row" id="udRow">
+          <button data-ud="yes" class="${h.ud==='yes'?'sel':''}">Saved It</button>
+          <button data-ud="no" class="${h.ud==='no'?'sel bad':''}">No</button>
+        </div>
+      </div>` : ``}
+
+      <div class="field">
+        <span class="field-label">Putts</span>
+        <div class="btn-row" id="puttsRow">
+          ${[0,1,2,3,4,5].map(n=>`<button data-putts="${n}" class="${h.putts===n?'sel':''}">${n===5?'5+':n}</button>`).join('')}
+        </div>
+      </div>
+      <div class="field">
+        <span class="field-label">First Putt From</span>
+        <div class="btn-row" id="puttDistRow">
+          ${[['in10','Inside 10ft'],['10to25','10-25ft'],['25plus','25ft+']].map(([v,l])=>
+            `<button data-puttdist="${v}" class="${h.puttDist===v?'sel':''}">${l}</button>`).join('')}
+        </div>
+        ${h.gir==='hit' ? `<div class="na-note">Estimated from your approach tap — tap a different bucket above if it's off.</div>` : ``}
+      </div>
+    </section>
+
+    <div class="ledger-wrap">
+      <table class="ledger">
+        <thead><tr><th>H</th><th>Par</th><th>Score</th><th>FIR</th><th>GIR</th><th>Putts</th></tr></thead>
+        <tbody>
+          ${round.holes.map((hh,i)=>{
+            const diff = hh.score-hh.par;
+            const scoreCls = diff>0?'score-over':(diff<0?'score-under':'');
+            return `<tr class="${i===currentHole?'current-row':''}" data-jump="${i}">
+              <td>${i+1}</td><td>${hh.par}</td>
+              <td class="${scoreCls}">${hh.score}</td>
+              <td>${hh.par===3?'—':(hh.fir==='hit'?'✓':hh.fir==='miss'?`<span title="${hh.firMissDir?('Missed '+hh.firMissDir):'Missed fairway'}" style="${hh.firMissSeverity==='bad'?'color:var(--red);font-weight:600;':''}">${hh.firMissDir==='left'?'L':hh.firMissDir==='right'?'R':'✕'}</span>`:'')}</td>
+              <td>${hh.gir==='hit'?'✓':hh.gir==='miss'?`<span title="${escapeHtml(girMissLabel(hh))}" style="${hh.girMissSeverity==='bad'?'color:var(--red);font-weight:600;':''}">${girMissAbbrev(hh)}</span>`:''}</td>
+              <td>${hh.putts}</td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="insights-panel">
+      <h3>What today's numbers say</h3>
+      ${renderInsightsList(stats)}
+    </div>
+
+    <section><button class="finish-btn" id="saveRoundBtn">Save This Round</button></section>
+  `;
+}
+
 function renderRoundView(stats){
   const h = round.holes[currentHole];
+  if(liveViewHoleIdx !== currentHole){
+    liveShotPending = null; liveShotClub = null; liveView = 'whole'; liveViewHoleIdx = currentHole;
+  }
+  // Arriving at a hole nobody's set up yet (freeform rounds, or a course
+  // hole with no saved shape) — pick par/yardage/shape once, then go. A
+  // course-tied hole that already has a shape skips straight past this.
+  const needsSetup = !h.setupDone && !h.quickMode && h.shots.length===0;
+  if(needsSetup){
+    return renderHoleSetupView(h, stats);
+  }
+  if(h.shape || h.quickMode){
+    return renderLiveHoleView(h, stats);
+  }
   if(h.par!==3 && h.teeClub==null){
     h.teeClub = defaultTeeClubForHole(currentHole);
   }
@@ -3142,7 +3794,7 @@ function attachHandlers(){
         round.course = course.name;
         round.courseId = course.id;
         round.teeId = tee.id;
-        round.holes = tee.holes.map(h=>({...blankHole(h.par), refYardage: h.yardage}));
+        round.holes = tee.holes.map(h=>({...blankHole(h.par), refYardage: h.yardage, shape: h.shape||null, setupDone: !!h.shape}));
         currentHole = 0;
         roundStartStep = null;
         render();
@@ -3164,7 +3816,14 @@ function attachHandlers(){
       });
       document.querySelectorAll('[data-holepar]').forEach(sel=>sel.onchange = ()=>{
         const [ti, hi] = sel.dataset.holepar.split(':').map(Number);
-        courseEditor.tees[ti].holes[hi].par = Number(sel.value);
+        const h = courseEditor.tees[ti].holes[hi];
+        h.par = Number(sel.value);
+        if(h.par===3) h.shape = 'straight'; // par 3 always plays direct — no picker, but still a real shape so the diagram works
+        render(); // shape select only shows for par 4/5 — needs to re-render either way
+      });
+      document.querySelectorAll('[data-holeshape]').forEach(sel=>sel.onchange = ()=>{
+        const [ti, hi] = sel.dataset.holeshape.split(':').map(Number);
+        courseEditor.tees[ti].holes[hi].shape = sel.value || null;
       });
       document.querySelectorAll('[data-holeyardage]').forEach(inp=>inp.oninput = ()=>{
         const [ti, hi] = inp.dataset.holeyardage.split(':').map(Number);
@@ -3302,6 +3961,206 @@ function attachHandlers(){
   document.querySelectorAll('#puttsRow button').forEach(b=>b.onclick=()=>{ h.putts = Number(b.dataset.putts); roundInProgress=true; render(); });
   const puttDistRow = document.getElementById('puttDistRow');
   if(puttDistRow) puttDistRow.querySelectorAll('button').forEach(b=>b.onclick=()=>{ h.puttDist = b.dataset.puttdist; roundInProgress=true; render(); });
+
+  // ---- Live shot-by-shot tracking (course-tied holes only) ----
+  const resetShotsBtn = document.getElementById('resetShotsBtn');
+  if(resetShotsBtn) resetShotsBtn.onclick = ()=>{
+    if(!confirm('Clear all logged shots for this hole?')) return;
+    h.shots = [];
+    h.fir=null; h.firMissDir=null; h.firMissSeverity=null; h.teeClub=null;
+    h.gir=null; h.girMissDist=null; h.girMissDir=null; h.girMissSeverity=null; h.girTap=null;
+    h.club=null; h.approachLie=null; h.approachYards=null; h.approach=null; h.ud=null; h.puttDist=null;
+    liveShotPending=null; liveShotClub=null;
+    roundInProgress=true;
+    render();
+  };
+  const toggleQuickBtn = document.getElementById('toggleQuickBtn');
+  if(toggleQuickBtn) toggleQuickBtn.onclick = ()=>{ h.quickMode = !h.quickMode; roundInProgress=true; render(); };
+  const viewToggleBtn = document.getElementById('viewToggleBtn');
+  if(viewToggleBtn) viewToggleBtn.onclick = e=>{ e.stopPropagation(); liveView = liveView==='whole'?'green':'whole'; render(); };
+  document.querySelectorAll('[data-liveclub]').forEach(b=>b.onclick=()=>{ liveShotClub = b.dataset.liveclub; render(); });
+
+  const editHoleSetupBtn = document.getElementById('editHoleSetupBtn');
+  if(editHoleSetupBtn) editHoleSetupBtn.onclick = ()=>{
+    if(h.shots.length && !confirm('Editing hole setup clears the shots already logged for this hole. Continue?')) return;
+    h.shots = []; h.setupDone = false; h.quickMode = false;
+    h.fir=null; h.firMissDir=null; h.firMissSeverity=null; h.teeClub=null;
+    h.gir=null; h.girMissDist=null; h.girMissDir=null; h.girMissSeverity=null; h.girTap=null;
+    h.club=null; h.approachLie=null; h.approachYards=null; h.approach=null; h.ud=null; h.puttDist=null;
+    liveShotPending=null; liveShotClub=null;
+    roundInProgress=true;
+    render();
+  };
+
+  // ---- Hole setup (par/yardage/shape, shown once per hole) ----
+  document.querySelectorAll('#setupParRow button').forEach(b=>b.onclick=()=>{
+    h.par = Number(b.dataset.setuppar);
+    if(h.par===3) h.shape = 'straight';
+    else if(!h.shape) h.shape = 'straight';
+    roundInProgress=true;
+    render();
+  });
+  const setupYardageInput = document.getElementById('setupYardageInput');
+  if(setupYardageInput) setupYardageInput.onchange = e=>{
+    h.refYardage = e.target.value!=='' ? Number(e.target.value) : null;
+    roundInProgress=true;
+    render();
+  };
+  document.querySelectorAll('#setupShapeRow button').forEach(b=>b.onclick=()=>{
+    h.shape = b.dataset.setupshape;
+    roundInProgress=true;
+    render();
+  });
+  const startHoleBtn = document.getElementById('startHoleBtn');
+  if(startHoleBtn) startHoleBtn.onclick = ()=>{
+    if(h.refYardage==null) h.refYardage = SETUP_DEFAULT_YARDAGE[h.par] || 400;
+    if(!h.shape) h.shape = 'straight';
+    h.setupDone = true;
+    roundInProgress = true;
+    render();
+  };
+  const setupQuickBtn = document.getElementById('setupQuickBtn');
+  if(setupQuickBtn) setupQuickBtn.onclick = ()=>{
+    h.quickMode = true;
+    roundInProgress = true;
+    render();
+  };
+
+  if(h.shape && !h.quickMode){
+    const liveSvg = document.getElementById('liveHoleSvg');
+    const diagramCardEl = document.getElementById('diagramCard');
+    if(liveSvg && diagramCardEl){
+      const hole = buildHoleLayout(h.shape, h.refYardage, h.par===3);
+      const svgToHoleSpace = (clientX, clientY) => {
+        const rect = liveSvg.getBoundingClientRect();
+        const vb = liveSvg.viewBox.baseVal;
+        const xFrac = (clientX-rect.left)/rect.width, yFrac = (clientY-rect.top)/rect.height;
+        const xSvg = vb.x + xFrac*vb.width, ySvg = vb.y + yFrac*vb.height;
+        const yhRaw = hole.totalH - HOLE_MARGIN_TEE - ySvg;
+        return { xh: xSvg, yh: Math.max(-HOLE_MARGIN_TEE+2, Math.min(hole.yardage+HOLE_MARGIN_GREEN-3, yhRaw)) };
+      };
+      const markerEl = () => document.getElementById('liveHoleSvg-pendingMarker');
+      const ringEl = document.getElementById('liveDragRing');
+      const tooltipEl = document.getElementById('liveDragTooltip');
+      const dtDist = document.getElementById('liveDtDist'), dtLie = document.getElementById('liveDtLie'), dtRemain = document.getElementById('liveDtRemain');
+      const FINGER_CLEARANCE = 58, TOOLTIP_H_EST = 46;
+
+      function paintLive(pos, clientX, clientY){
+        const m = markerEl();
+        if(m){ m.setAttribute('cx', pos.xh.toFixed(2)); m.setAttribute('cy', hole.svgY(pos.yh).toFixed(2)); m.setAttribute('opacity','1'); }
+        const cardRect = diagramCardEl.getBoundingClientRect();
+        const localX = clientX-cardRect.left, localY = clientY-cardRect.top;
+        ringEl.style.left = localX+'px'; ringEl.style.top = localY+'px'; ringEl.classList.add('on');
+        const anchorAbove = localY > FINGER_CLEARANCE + TOOLTIP_H_EST;
+        tooltipEl.style.left = localX+'px';
+        tooltipEl.style.top = (anchorAbove ? localY-FINGER_CLEARANCE : localY+FINGER_CLEARANCE)+'px';
+        tooltipEl.classList.remove('above','below');
+        tooltipEl.classList.add(anchorAbove?'above':'below','on');
+        const origin = currentLiveOrigin(h);
+        const distSoFar = Math.sqrt((pos.xh-origin.xh)**2+(pos.yh-origin.yh)**2);
+        const remain = Math.sqrt((pos.xh-hole.greenCx)**2+(pos.yh-hole.yardage)**2);
+        const c = classifyHoleShot(hole, pos.xh, pos.yh);
+        dtDist.textContent = Math.round(distSoFar)+'y';
+        dtLie.textContent = liveLieLabel(c.lieId);
+        const lc = liveLieColor(c.lieId);
+        dtLie.style.background = lc.bg; dtLie.style.color = lc.fg;
+        dtRemain.textContent = Math.round(remain)+'y to pin';
+      }
+
+      const MIN_ZOOM=1, MAX_ZOOM=6;
+      const activePointers = new Map();
+      let singleDragActive = false;
+      let pinch = null;
+      const currentVb = () => { const b = liveSvg.viewBox.baseVal; return {x:b.x,y:b.y,w:b.width,h:b.height}; };
+      const pairDist = pts => Math.hypot(pts[0].x-pts[1].x, pts[0].y-pts[1].y);
+      const pairMid = pts => ({x:(pts[0].x+pts[1].x)/2, y:(pts[0].y+pts[1].y)/2});
+      function endSingleDrag(){ tooltipEl.classList.remove('on'); ringEl.classList.remove('on'); singleDragActive=false; }
+
+      liveSvg.onpointerdown = e=>{
+        e.preventDefault();
+        liveSvg.setPointerCapture(e.pointerId);
+        activePointers.set(e.pointerId, {x:e.clientX,y:e.clientY});
+        if(activePointers.size===1){
+          singleDragActive = true;
+          liveShotClub = null; // re-defaults to the top recommendation for this fresh tap
+          paintLive(svgToHoleSpace(e.clientX,e.clientY), e.clientX, e.clientY);
+        } else if(activePointers.size===2){
+          if(singleDragActive) endSingleDrag();
+          const pts=[...activePointers.values()];
+          const startVb=currentVb(), midClient=pairMid(pts);
+          const rect=liveSvg.getBoundingClientRect();
+          const anchor={ x:startVb.x+((midClient.x-rect.left)/rect.width)*startVb.w, y:startVb.y+((midClient.y-rect.top)/rect.height)*startVb.h };
+          pinch = { startVb, initialDist:pairDist(pts), anchor };
+        }
+      };
+      liveSvg.onpointermove = e=>{
+        if(!activePointers.has(e.pointerId)) return;
+        activePointers.set(e.pointerId, {x:e.clientX,y:e.clientY});
+        if(pinch && activePointers.size===2){
+          const pts=[...activePointers.values()];
+          const scale=Math.min(MAX_ZOOM,Math.max(MIN_ZOOM,pairDist(pts)/pinch.initialDist));
+          const newW=pinch.startVb.w/scale, newH=pinch.startVb.h/scale;
+          const rect=liveSvg.getBoundingClientRect(), mid=pairMid(pts);
+          const xFrac=(mid.x-rect.left)/rect.width, yFrac=(mid.y-rect.top)/rect.height;
+          const newX=pinch.anchor.x-xFrac*newW, newY=pinch.anchor.y-yFrac*newH;
+          liveSvg.setAttribute('viewBox', `${newX.toFixed(2)} ${newY.toFixed(2)} ${newW.toFixed(2)} ${newH.toFixed(2)}`);
+        } else if(singleDragActive && activePointers.size===1){
+          paintLive(svgToHoleSpace(e.clientX,e.clientY), e.clientX, e.clientY);
+        }
+      };
+      const onPointerEnd = e=>{
+        activePointers.delete(e.pointerId);
+        if(pinch){ if(activePointers.size<2) pinch=null; return; }
+        if(singleDragActive && activePointers.size===0){
+          endSingleDrag();
+          liveShotPending = svgToHoleSpace(e.clientX, e.clientY);
+          render();
+        }
+      };
+      liveSvg.onpointerup = onPointerEnd;
+      liveSvg.onpointercancel = onPointerEnd;
+    }
+
+    const logShotBtn = document.getElementById('logShotBtn');
+    if(logShotBtn) logShotBtn.onclick = async ()=>{
+      if(!liveShotPending) return;
+      const hole = buildHoleLayout(h.shape, h.refYardage, h.par===3);
+      const origin = currentLiveOrigin(h);
+      const distJustHit = Math.sqrt((liveShotPending.xh-origin.xh)**2 + (liveShotPending.yh-origin.yh)**2);
+      const overrideEl = document.getElementById('remainOverride');
+      const remain = (overrideEl && overrideEl.value!=='') ? Number(overrideEl.value)
+        : Math.sqrt((liveShotPending.xh-hole.greenCx)**2 + (liveShotPending.yh-hole.yardage)**2);
+      const c = classifyHoleShot(hole, liveShotPending.xh, liveShotPending.yh);
+      const clubId = liveShotClub || (bag[0] && bag[0].id) || null;
+      const originLieId = h.shots.length ? classifyHoleShot(hole, origin.xh, origin.yh).lieId : 'tee';
+      const targetAtOrigin = Math.round(Math.sqrt((origin.xh-hole.greenCx)**2 + (origin.yh-hole.yardage)**2));
+
+      h.shots.push({ xh: liveShotPending.xh, yh: liveShotPending.yh, club: clubId, lie: c.lieId, distYards: distJustHit, remainYards: remain });
+
+      // Feeds the learned-yardage model straight from the round — the whole
+      // reason for this rebuild. No swing/strike prompt (keeps this to one
+      // tap): a full, solid-contact swing is the reasonable assumption for
+      // an on-course shot, same as the practice log's own defaults.
+      if(clubId){
+        const club = bag.find(x=>x.id===clubId);
+        if(club){
+          club.shots = club.shots || [];
+          club.shots.push({
+            date: new Date().toISOString().slice(0,10), swing:'full', strike:'solid',
+            lie: originLieId==='green' ? 'fairway' : originLieId,
+            target: targetAtOrigin, actual: Math.round(distJustHit), neutral: Math.round(distJustHit)
+          });
+          if(club.shots.length>40) club.shots = club.shots.slice(-40);
+          await saveBag();
+        }
+      }
+
+      deriveHoleSummaryFields(h);
+      liveShotPending = null; liveShotClub = null;
+      roundInProgress = true;
+      render();
+    };
+  }
 
   document.querySelectorAll('[data-jump]').forEach(row=>row.onclick=()=>{ currentHole = Number(row.dataset.jump); caddieOpenHole=null; render(); });
 
