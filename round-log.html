@@ -139,6 +139,25 @@
   }
   .mast-input::placeholder{color:rgba(251,249,242,0.5);}
 
+  /* Compact masthead — shown instead of the full header while a round is
+     actively being played, so the hole diagram gets its vertical space back
+     instead of losing it to the headline and course/date/slope inputs you
+     only ever touch once, at round start. */
+  header.mast.mast-compact{
+    padding:14px 46px 14px 16px;
+    display:flex; align-items:center; min-height:0;
+  }
+  header.mast.mast-compact .ham-btn{ top:13px; }
+  header.mast.mast-compact .mc-info{
+    flex:1; min-width:0;
+    font-family:'Fraunces',serif; font-weight:600; font-size:15.5px;
+    color:var(--paper-raised); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
+  header.mast.mast-compact .mc-info .mc-date{
+    font-family:'IBM Plex Mono',monospace; font-weight:500; font-size:11px;
+    color:var(--gold-pale); opacity:0.85;
+  }
+
   /* Tabs */
   nav.tabs{
     display:flex;
@@ -460,17 +479,20 @@
   .drag-tooltip{
     position:absolute; left:0; top:0; pointer-events:none; background:rgba(15,25,18,0.92); color:#fff;
     border-radius:10px; padding:7px 10px; white-space:nowrap; box-shadow:0 8px 20px -6px rgba(0,0,0,0.55);
-    display:none; z-index:5;
+    display:none; z-index:5; --tail-x:50%;
   }
   .drag-tooltip.on{ display:block; }
-  .drag-tooltip.above{ transform:translate(-50%,-100%); }
-  .drag-tooltip.below{ transform:translate(-50%,0); }
+  /* Horizontal position is a JS-computed, clamped `left` (see paintLive) so the
+     bubble stays inside .diagram-card's overflow:hidden instead of getting cut
+     off near the edges of a narrow card — so only the vertical flip is a transform. */
+  .drag-tooltip.above{ transform:translateY(-100%); }
+  .drag-tooltip.below{ transform:translateY(0); }
   .drag-tooltip.above::after{
-    content:""; position:absolute; left:50%; bottom:-6px; width:0; height:0; margin-left:-6px;
+    content:""; position:absolute; left:var(--tail-x); bottom:-6px; width:0; height:0; margin-left:-6px;
     border-left:6px solid transparent; border-right:6px solid transparent; border-top:6px solid rgba(15,25,18,0.92);
   }
   .drag-tooltip.below::after{
-    content:""; position:absolute; left:50%; top:-6px; width:0; height:0; margin-left:-6px;
+    content:""; position:absolute; left:var(--tail-x); top:-6px; width:0; height:0; margin-left:-6px;
     border-left:6px solid transparent; border-right:6px solid transparent; border-bottom:6px solid rgba(15,25,18,0.92);
   }
   .drag-tooltip .dt-main{ font-family:'IBM Plex Mono',monospace; font-size:15px; font-weight:700; line-height:1.2; }
@@ -721,7 +743,7 @@
 <script>
 const CLUBS = ["Driver","Fairway Wood","Hybrid","Long Iron (3-5)","Mid Iron (6-7)","Short Iron (8-9)","Wedge"];
 const APPROACH_RANGES = ["<50","50-100","100-150","150-200","200+"];
-const APP_VERSION = '2.1.1';
+const APP_VERSION = '2.1.2';
 
 function blankHole(par){
   return {
@@ -2218,7 +2240,13 @@ function render(){
     return;
   }
   const stats = computeStats(round);
-  app.innerHTML = `
+  const compactMast = activeTab==='round' && roundStartStep!=='selectCourse';
+  const mastHtml = compactMast ? `
+    <header class="mast mast-compact">
+      <button class="ham-btn" id="hamBtn">&#9776;</button>
+      <div class="mc-info">${round.course ? escapeHtml(round.course) : 'Round Log'}${round.date ? ` <span class="mc-date">· ${escapeHtml(round.date)}</span>` : ''}</div>
+    </header>
+  ` : `
     <header class="mast">
       <button class="ham-btn" id="hamBtn">&#9776;</button>
       <div class="eyebrow">Round Log</div>
@@ -2232,6 +2260,9 @@ function render(){
         <input id="ratingInput" type="number" inputmode="decimal" placeholder="Rating (optional)" value="${escapeHtml(round.rating)}">
       </div>
     </header>
+  `;
+  app.innerHTML = `
+    ${mastHtml}
     <nav class="tabs">
       <button data-tab="home" class="${activeTab==='home'?'active':''}">Home</button>
       <button data-tab="caddie" class="${activeTab==='caddie'?'active':''}">Caddie</button>
@@ -2940,13 +2971,14 @@ function renderHomeView(){
 }
 
 const LIVE_BOTTOM_SECTION_H = 240; // caddie-line + confirm-box(max) + shot-log, fixed
-const LIVE_MAX_DIAGRAM_H = 400;
-// Rough allowance for the chrome above/below renderRoundView's own content —
-// the masthead + tab bar (~160px) plus this view's own header/gaps — used to
-// size the diagram off the real window height. Worth rechecking on an actual
-// device: unlike the diagram's own math (verified exactly), this specific
-// number is an estimate, not a measurement.
-const LIVE_CHROME_ESTIMATE = 160;
+const LIVE_MAX_DIAGRAM_H = 480;
+// Allowance for the chrome above renderRoundView's own content — the compact
+// masthead (~52px) + tab bar (~40px). A real device screenshot showed the
+// old full-size masthead ate far more than this, starving the diagram — the
+// fix was to switch to .mast-compact during play (see render()) rather than
+// keep inflating this number. Computed from the compact masthead's own CSS,
+// not measured on-device, so still worth rechecking if it looks off.
+const LIVE_CHROME_ESTIMATE = 100;
 
 function currentLiveOrigin(h){
   if(!h.shots.length) return {xh:0, yh:0};
@@ -3096,7 +3128,7 @@ function renderLiveHoleView(h, stats){
     caddieHtml = `<div class="cbadge">Confirm</div><div class="ctext">Correct the yardage if you've got a precise number, check the club, then log it.</div>`;
   }
 
-  const chromeH = LIVE_CHROME_ESTIMATE + 120; // + this view's own header/gaps
+  const chromeH = LIVE_CHROME_ESTIMATE + 60; // + this view's own .live-hdr and quick-link row
   const diagramHeightPx = Math.min(LIVE_MAX_DIAGRAM_H, Math.max(160,
     (typeof window!=='undefined'?window.innerHeight:700) - chromeH - LIVE_BOTTOM_SECTION_H));
   const pxPerYard = diagramHeightPx / hole.totalH;
@@ -4057,11 +4089,7 @@ function attachHandlers(){
         const cardRect = diagramCardEl.getBoundingClientRect();
         const localX = clientX-cardRect.left, localY = clientY-cardRect.top;
         ringEl.style.left = localX+'px'; ringEl.style.top = localY+'px'; ringEl.classList.add('on');
-        const anchorAbove = localY > FINGER_CLEARANCE + TOOLTIP_H_EST;
-        tooltipEl.style.left = localX+'px';
-        tooltipEl.style.top = (anchorAbove ? localY-FINGER_CLEARANCE : localY+FINGER_CLEARANCE)+'px';
-        tooltipEl.classList.remove('above','below');
-        tooltipEl.classList.add(anchorAbove?'above':'below','on');
+
         const origin = currentLiveOrigin(h);
         const distSoFar = Math.sqrt((pos.xh-origin.xh)**2+(pos.yh-origin.yh)**2);
         const remain = Math.sqrt((pos.xh-hole.greenCx)**2+(pos.yh-hole.yardage)**2);
@@ -4071,6 +4099,21 @@ function attachHandlers(){
         const lc = liveLieColor(c.lieId);
         dtLie.style.background = lc.bg; dtLie.style.color = lc.fg;
         dtRemain.textContent = Math.round(remain)+'y to pin';
+
+        const anchorAbove = localY > FINGER_CLEARANCE + TOOLTIP_H_EST;
+        tooltipEl.classList.remove('above','below');
+        tooltipEl.classList.add(anchorAbove?'above':'below','on');
+        tooltipEl.style.top = (anchorAbove ? localY-FINGER_CLEARANCE : localY+FINGER_CLEARANCE)+'px';
+
+        // Center the bubble on the touch point, then clamp so it can't be cut
+        // off by .diagram-card's overflow:hidden on a narrow card. Measured
+        // after the text above is set (and the .on class applied) so ttW
+        // reflects the bubble's real rendered width, not a stale/zero one.
+        const ttW = tooltipEl.offsetWidth || 120;
+        const pad = 6;
+        const ttLeft = Math.max(pad, Math.min(cardRect.width - ttW - pad, localX - ttW/2));
+        tooltipEl.style.left = ttLeft+'px';
+        tooltipEl.style.setProperty('--tail-x', Math.max(12, Math.min(ttW-12, localX-ttLeft))+'px');
       }
 
       const MIN_ZOOM=1, MAX_ZOOM=6;
