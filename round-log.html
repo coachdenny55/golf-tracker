@@ -721,7 +721,7 @@
 <script>
 const CLUBS = ["Driver","Fairway Wood","Hybrid","Long Iron (3-5)","Mid Iron (6-7)","Short Iron (8-9)","Wedge"];
 const APPROACH_RANGES = ["<50","50-100","100-150","150-200","200+"];
-const APP_VERSION = '2.1';
+const APP_VERSION = '2.1.1';
 
 function blankHole(par){
   return {
@@ -3878,8 +3878,14 @@ function attachHandlers(){
   const nextBtn = document.getElementById('nextHole');
   if(nextBtn) nextBtn.onclick = ()=>{ if(currentHole<17){currentHole++; render();} };
 
-  document.getElementById('scoreUp').onclick = ()=>{ h.score = Math.min(h.score+1,12); roundInProgress=true; render(); };
-  document.getElementById('scoreDown').onclick = ()=>{ h.score = Math.max(h.score-1,1); roundInProgress=true; render(); };
+  // Guarded (unlike the rest of this file's original pattern) because the
+  // new hole-setup screen doesn't render a score display at all — you
+  // haven't played the hole yet. Letting these throw on a null lookup used
+  // to silently kill every handler wired after them in this function.
+  const scoreUpBtn = document.getElementById('scoreUp');
+  if(scoreUpBtn) scoreUpBtn.onclick = ()=>{ h.score = Math.min(h.score+1,12); roundInProgress=true; render(); };
+  const scoreDownBtn = document.getElementById('scoreDown');
+  if(scoreDownBtn) scoreDownBtn.onclick = ()=>{ h.score = Math.max(h.score-1,1); roundInProgress=true; render(); };
 
   document.querySelectorAll('#parRow button').forEach(b=>b.onclick=()=>{
     h.par = Number(b.dataset.par);
