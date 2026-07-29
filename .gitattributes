@@ -1,0 +1,6 @@
+# Normalize line endings to LF for everyone, regardless of OS or local
+# core.autocrlf setting, so checkouts are identical on every machine and
+# Windows doesn't warn about LF/CRLF conversion on every commit.
+* text=auto eol=lf
+
+*.png binary
