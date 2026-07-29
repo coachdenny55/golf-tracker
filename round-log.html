@@ -743,7 +743,7 @@
 <script>
 const CLUBS = ["Driver","Fairway Wood","Hybrid","Long Iron (3-5)","Mid Iron (6-7)","Short Iron (8-9)","Wedge"];
 const APPROACH_RANGES = ["<50","50-100","100-150","150-200","200+"];
-const APP_VERSION = '2.1.2';
+const APP_VERSION = '2.1.3';
 
 function blankHole(par){
   return {
@@ -2972,6 +2972,7 @@ function renderHomeView(){
 
 const LIVE_BOTTOM_SECTION_H = 240; // caddie-line + confirm-box(max) + shot-log, fixed
 const LIVE_MAX_DIAGRAM_H = 480;
+const LIVE_DIAGRAM_SIDE_MARGIN = 20; // matches .live-bottom's own side padding so the diagram lines up with the caddie/confirm/shot-log boxes below it
 // Allowance for the chrome above renderRoundView's own content — the compact
 // masthead (~52px) + tab bar (~40px). A real device screenshot showed the
 // old full-size masthead ate far more than this, starving the diagram — the
@@ -3132,11 +3133,28 @@ function renderLiveHoleView(h, stats){
   const diagramHeightPx = Math.min(LIVE_MAX_DIAGRAM_H, Math.max(160,
     (typeof window!=='undefined'?window.innerHeight:700) - chromeH - LIVE_BOTTOM_SECTION_H));
   const pxPerYard = diagramHeightPx / hole.totalH;
-  const cardWidthPx = (hole.viewMaxX-hole.viewMinX) * pxPerYard;
+
+  // The card fills the screen's width regardless of how narrow the hole's own
+  // corridor is — a straight, unbent hole is only ~40-60 yards wide but 400+
+  // yards long, so sizing the card off the hole's own aspect ratio (like the
+  // height math above does) produced a tall skinny strip with huge wasted
+  // margins on a real phone. Instead, widen the viewBox beyond the hole's
+  // fairway bounds to match the screen, centered on the hole's own centerline
+  // — the extra space either side just renders as more rough (the SVG's own
+  // background), never stretching or cropping the hole itself. A genuinely
+  // wide hole (e.g. a sharp dogleg) still gets its own bounds if those exceed
+  // the screen width.
+  const holeWidthYards = hole.viewMaxX - hole.viewMinX;
+  const screenWidthPx = Math.min(typeof window!=='undefined'?window.innerWidth:390, 480) - LIVE_DIAGRAM_SIDE_MARGIN*2;
+  const viewWidthYards = Math.max(holeWidthYards, screenWidthPx / pxPerYard);
+  const cardWidthPx = viewWidthYards * pxPerYard;
+  const viewPadYards = (viewWidthYards - holeWidthYards) / 2;
+  const wholeViewMinX = hole.viewMinX - viewPadYards;
+  const wholeViewMaxX = hole.viewMaxX + viewPadYards;
 
   let viewBox;
   if(liveView==='whole'){
-    viewBox = `${hole.viewMinX} 0 ${hole.viewMaxX-hole.viewMinX} ${hole.totalH}`;
+    viewBox = `${wholeViewMinX} 0 ${wholeViewMaxX-wholeViewMinX} ${hole.totalH}`;
   } else {
     const gh = 50, gw = gh*(cardWidthPx/diagramHeightPx);
     viewBox = `${hole.greenCx-gw/2} ${Math.max(hole.greenY-gh*0.4,0)} ${gw} ${gh}`;
