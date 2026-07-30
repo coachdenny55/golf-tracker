@@ -743,7 +743,7 @@
 <script>
 const CLUBS = ["Driver","Fairway Wood","Hybrid","Long Iron (3-5)","Mid Iron (6-7)","Short Iron (8-9)","Wedge"];
 const APPROACH_RANGES = ["<50","50-100","100-150","150-200","200+"];
-const APP_VERSION = '2.1.3';
+const APP_VERSION = '2.1.4';
 
 function blankHole(par){
   return {
@@ -1143,12 +1143,30 @@ function deriveHoleSummaryFields(h){
 }
 
 // ---------- Bag & Caddie model ----------
+// Half/three-quarter swings default to a flat yardage gap off the club's stock
+// number (offset) rather than a percentage (mult) — a fixed 10-20y club-to-club
+// gap matches reality much better than a percentage does (a 20% cut off a
+// driver is a wildly different animal than 20% off a wedge). This is only the
+// starting assumption: effectiveYardageForSwing blends it with real logged
+// shots at that swing length and gets replaced by actual data fast. Full/extra
+// stay percentage-based since nobody's asked to change those.
 const SWINGS = [
-  {id:'half',  label:'½ swing',  short:'½',    mult:0.75, penalty:5, knock:0.35},
-  {id:'three', label:'¾ swing',  short:'¾',    mult:0.88, penalty:2, knock:0.65},
-  {id:'full',  label:'Full',     short:'Full', mult:1.00, penalty:0, knock:1.00},
-  {id:'extra', label:'Extra',    short:'Extra',mult:1.05, penalty:7, knock:1.15}
+  {id:'half',  label:'½ swing',  short:'½',    offset:-20, penalty:5, knock:0.35},
+  {id:'three', label:'¾ swing',  short:'¾',    offset:-10, penalty:2, knock:0.65},
+  {id:'full',  label:'Full',     short:'Full', mult:1.00,  penalty:0, knock:1.00},
+  {id:'extra', label:'Extra',    short:'Extra',mult:1.05,  penalty:7, knock:1.15}
 ];
+// Scales a baseline (usually a club's stock/effective full-swing yardage) down
+// to what a given swing length is expected to produce.
+function scaleToSwing(yards, sw){
+  return sw.offset!=null ? yards + sw.offset : yards * sw.mult;
+}
+// Inverse of scaleToSwing: given a distance actually achieved AT that swing
+// length, project the comparable full-swing distance — used to fold a partial-
+// swing shot into the club's overall (full-swing) learned yardage.
+function scaleFromSwing(yardsAtSwing, sw){
+  return sw.offset!=null ? yardsAtSwing - sw.offset : yardsAtSwing / sw.mult;
+}
 const CLUB_CATS = [
   {id:'wood',   label:'Wood'},
   {id:'hybrid', label:'Hybrid'},
@@ -1200,28 +1218,34 @@ let focusExpanded = {}; // {key: bool}
 let cachedFocus = []; // computed candidates, refreshed on load/save
 let caddieOpenHole = null; // which hole index has the inline Get Club panel open
 
-// Learned yardage PER SWING TYPE: blends stock*swingMult (a prior worth ~3 shots)
-// with actual logged shots hit at that specific swing length. Falls back to the
-// full-swing learned number scaled by the swing multiplier when a swing bucket
-// has no data of its own yet.
+// Learned yardage PER SWING TYPE: blends the swing's stock estimate (a prior
+// worth ~3 shots) with actual logged shots hit at that specific swing length.
+// Falls back to the full-swing learned number, scaled to this swing, when a
+// swing bucket has no data of its own yet.
 function effectiveYardageForSwing(club, swingId){
   const sw = SWINGS.find(s=>s.id===swingId) || SWINGS.find(s=>s.id==='full');
   const allShots = (club.shots||[]).filter(s => s.strike==='flush' || s.strike==='solid');
   const bucketShots = allShots.filter(s => s.swing===swingId);
   const PRIOR = 3;
   if(bucketShots.length){
-    let num = club.yards*sw.mult*PRIOR, den = PRIOR;
+    let num = scaleToSwing(club.yards, sw)*PRIOR, den = PRIOR;
     const recent = bucketShots.slice(-15);
     recent.forEach((s,i)=>{
       const strikeW = s.strike==='flush' ? 1 : 0.4;
       const recencyW = 0.5 + 0.5*((i+1)/recent.length);
       const w = strikeW*recencyW;
-      num += s.neutral*w; den += w;
+      // s.neutral is stored as a full-swing-equivalent number (practice-log
+      // entries run it through scaleFromSwing) so it can be pooled across
+      // swing lengths elsewhere (effectiveYardage, dispersion, bias). Scale it
+      // back down to this swing's own distance before blending it with the
+      // swing-scaled prior above — otherwise real data would drag the ¾/½
+      // number up toward the full-swing distance instead of refining it.
+      num += scaleToSwing(s.neutral, sw)*w; den += w;
     });
     return num/den;
   }
   // No data for this swing bucket specifically — fall back to full-swing learned value, scaled.
-  return effectiveYardage(club) * sw.mult;
+  return scaleToSwing(effectiveYardage(club), sw);
 }
 // Learned yardage: blends your entered stock number with real logged shots,
 // weighting recent + flush strikes highest. Stock acts as a prior worth ~4 shots.
@@ -2542,7 +2566,7 @@ function renderBagView(){
         : `<div class="gap-flag ok">Your gaps are even top to bottom — no dead yardages and no redundant clubs.</div>`}
     </section>
 
-    <div class="home-section-title">Partial Swing Matrix — learned per swing, not just multiplied</div>
+    <div class="home-section-title">Partial Swing Matrix — learned per swing, not just estimated</div>
     <div class="ledger-wrap">
       <table class="matrix">
         <thead><tr><th style="text-align:left;">Club</th><th>½</th><th>¾</th><th>Full</th><th>Extra</th></tr></thead>
@@ -2559,7 +2583,7 @@ function renderBagView(){
           }).join('')}
         </tbody>
       </table>
-      <div class="na-note">● marks a swing length you've actually logged shots for — those numbers are real, not just multiplied from your full-swing yardage. Memorize the ¾ column for your wedges and you stop having to manufacture half-shots on the fly.</div>
+      <div class="na-note">● marks a swing length you've actually logged shots for — those numbers are real, not just estimated from your full-swing yardage. Memorize the ¾ column for your wedges and you stop having to manufacture half-shots on the fly.</div>
     </div>
 
     <div class="home-section-title">Calibration Status</div>
@@ -3797,10 +3821,10 @@ function attachHandlers(){
       const direction = window._logDir || 'center';
 
       // Strip today's conditions back out to recover the neutral-condition yardage,
-      // then divide out the swing length to get a comparable full-swing number.
+      // then project out the swing length to get a comparable full-swing number.
       const m = conditionMultiplier(shot, swingId);
       const neutralAtSwing = (actual + shot.elev/3) * m;
-      const neutral = neutralAtSwing / sw.mult;
+      const neutral = scaleFromSwing(neutralAtSwing, sw);
 
       club.shots = club.shots || [];
       club.shots.push({
