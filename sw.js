@@ -4,7 +4,7 @@
 // Paths are relative (not rooted at '/') so this works whether the app is
 // hosted at a domain root or under a GitHub Pages project subpath.
 
-const CACHE_NAME = 'round-log-2.1.4';
+const CACHE_NAME = 'round-log-2.1.5';
 
 const ASSETS = [
   'round-log.html',

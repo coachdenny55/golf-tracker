@@ -743,7 +743,7 @@
 <script>
 const CLUBS = ["Driver","Fairway Wood","Hybrid","Long Iron (3-5)","Mid Iron (6-7)","Short Iron (8-9)","Wedge"];
 const APPROACH_RANGES = ["<50","50-100","100-150","150-200","200+"];
-const APP_VERSION = '2.1.4';
+const APP_VERSION = '2.1.5';
 
 function blankHole(par){
   return {
@@ -1012,6 +1012,13 @@ function renderHoleShapeSvg(hole, opts){
   opts = opts || {};
   const vb = opts.viewBox || `${hole.viewMinX} 0 ${hole.viewMaxX-hole.viewMinX} ${hole.totalH}`;
   const sw = opts.small ? 1.1 : 0.55;
+  // Shot dots and the pending marker are UI elements, not real-world-sized
+  // things like the green or fairway — at whatever yard-radius looks right in
+  // the whole-hole view, they'd look comically oversized once zoomed into the
+  // green view's much shorter viewBox. opts.zoom (viewBox height the caller is
+  // using, relative to the whole-hole height) lets them shrink back down to a
+  // sensible on-screen size instead of staying a fixed size in yards.
+  const mz = opts.zoom || 1;
   const stripes = [];
   if(!opts.small){
     for(let i=1;i<9;i++){
@@ -1021,11 +1028,12 @@ function renderHoleShapeSvg(hole, opts){
   }
   const shots = (opts.shots||[]).map((s,i)=>{
     const y = hole.svgY(s.yh);
-    return `<circle cx="${s.xh.toFixed(2)}" cy="${y.toFixed(2)}" r="${opts.small?2.6:2.3}" fill="var(--green-deep)" stroke="#fff" stroke-width="${opts.small?0.6:0.55}"/>
-      ${opts.small?'':`<text x="${s.xh.toFixed(2)}" y="${(y-3.4).toFixed(2)}" text-anchor="middle" font-size="4" font-family="IBM Plex Mono, monospace" fill="var(--ink)" font-weight="700">${i+1}</text>`}`;
+    const r = (opts.small?2.6:2.3)/mz;
+    return `<circle cx="${s.xh.toFixed(2)}" cy="${y.toFixed(2)}" r="${r.toFixed(2)}" fill="var(--green-deep)" stroke="#fff" stroke-width="${(opts.small?0.6:0.55)/mz}"/>
+      ${opts.small?'':`<text x="${s.xh.toFixed(2)}" y="${(y-3.4/mz).toFixed(2)}" text-anchor="middle" font-size="${(4/mz).toFixed(2)}" font-family="IBM Plex Mono, monospace" fill="var(--ink)" font-weight="700">${i+1}</text>`}`;
   }).join('');
   const pendingPos = opts.pending || {xh:0, yh:0};
-  const pendingDot = opts.small ? '' : `<circle id="${opts.id}-pendingMarker" cx="${pendingPos.xh.toFixed(2)}" cy="${hole.svgY(pendingPos.yh).toFixed(2)}" r="3.1" fill="var(--gold)" stroke="#fff" stroke-width="0.7" opacity="${opts.pending?1:0}"/>`;
+  const pendingDot = opts.small ? '' : `<circle id="${opts.id}-pendingMarker" cx="${pendingPos.xh.toFixed(2)}" cy="${hole.svgY(pendingPos.yh).toFixed(2)}" r="${(3.1/mz).toFixed(2)}" fill="var(--gold)" stroke="#fff" stroke-width="${(0.7/mz).toFixed(2)}" opacity="${opts.pending?1:0}"/>`;
 
   return `<svg id="${opts.id}" viewBox="${vb}" preserveAspectRatio="xMidYMid slice" style="background:var(--turf-rough);display:block;width:100%;height:100%;">
     <defs><clipPath id="fw-${opts.id}"><path d="${hole.fairwayD}"/></clipPath></defs>
@@ -3176,12 +3184,15 @@ function renderLiveHoleView(h, stats){
   const wholeViewMinX = hole.viewMinX - viewPadYards;
   const wholeViewMaxX = hole.viewMaxX + viewPadYards;
 
-  let viewBox;
+  let viewBox, zoom = 1;
   if(liveView==='whole'){
     viewBox = `${wholeViewMinX} 0 ${wholeViewMaxX-wholeViewMinX} ${hole.totalH}`;
   } else {
-    const gh = 50, gw = gh*(cardWidthPx/diagramHeightPx);
+    // 65 (was 50) yards tall — the green (~26y across) was dominating the
+    // frame with barely any fringe/rough showing around it.
+    const gh = 65, gw = gh*(cardWidthPx/diagramHeightPx);
     viewBox = `${hole.greenCx-gw/2} ${Math.max(hole.greenY-gh*0.4,0)} ${gw} ${gh}`;
+    zoom = hole.totalH / gh;
   }
 
   const shotListHtml = h.shots.length
@@ -3225,7 +3236,7 @@ function renderLiveHoleView(h, stats){
 
   return header + `
     <div class="diagram-card" id="diagramCard" style="width:${cardWidthPx.toFixed(1)}px;height:${diagramHeightPx.toFixed(1)}px;">
-      ${renderHoleShapeSvg(hole,{id:'liveHoleSvg', viewBox, shots:h.shots, pending:liveShotPending})}
+      ${renderHoleShapeSvg(hole,{id:'liveHoleSvg', viewBox, zoom, shots:h.shots, pending:liveShotPending})}
       <button class="view-fab" id="viewToggleBtn">${liveView==='whole' ? '⤢ Green' : '⤡ Whole'}</button>
       <div class="drag-ring" id="liveDragRing"></div>
       <div class="drag-tooltip" id="liveDragTooltip"><div class="dt-main"><span id="liveDtDist">0y</span><span class="dt-lie" id="liveDtLie">Fairway</span></div><div class="dt-sub" id="liveDtRemain">0y to pin</div></div>
