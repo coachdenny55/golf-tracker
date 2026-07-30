@@ -743,7 +743,7 @@
 <script>
 const CLUBS = ["Driver","Fairway Wood","Hybrid","Long Iron (3-5)","Mid Iron (6-7)","Short Iron (8-9)","Wedge"];
 const APPROACH_RANGES = ["<50","50-100","100-150","150-200","200+"];
-const APP_VERSION = '2.1.5';
+const APP_VERSION = '2.1.6';
 
 function blankHole(par){
   return {
@@ -2054,6 +2054,17 @@ async function loadHistory(){
     const cRes = await window.storage.get('courses-index');
     courses = (cRes && cRes.value) ? JSON.parse(cRes.value) : [];
   }catch(e){ courses = []; }
+  try{
+    const ipRes = await window.storage.get('in-progress-round');
+    if(ipRes && ipRes.value){
+      const saved = JSON.parse(ipRes.value);
+      if(saved && saved.round){
+        round = saved.round;
+        currentHole = saved.currentHole || 0;
+        roundInProgress = true;
+      }
+    }
+  }catch(e){ /* no draft, or a corrupted one - just start fresh */ }
   render();
   await refreshFocus();
   render();
@@ -2069,6 +2080,20 @@ async function saveBag(){
 async function saveSettings(){
   try{ await window.storage.set('caddie-settings', JSON.stringify({tempF:shot.tempF, alt:shot.alt})); }
   catch(e){ /* non-critical */ }
+}
+// Continuous draft of the round being played, so a force quit, crash, or dead
+// battery mid-round doesn't lose everything — restored in loadHistory() and
+// cleared once the round is actually saved (see saveRoundBtn). Fired from
+// render() itself (fire-and-forget, not awaited) so every state change during
+// a round gets covered without having to remember to call this from each
+// individual handler.
+async function saveInProgressRound(){
+  try{ await window.storage.set('in-progress-round', JSON.stringify({round, currentHole})); }
+  catch(e){ console.error('in-progress round save failed', e); }
+}
+async function clearInProgressRound(){
+  try{ await window.storage.delete('in-progress-round'); }
+  catch(e){ /* already gone, fine */ }
 }
 async function saveRoundToStorage(summary, fullRound){
   try{
@@ -2266,6 +2291,7 @@ function buildInsights(r, stats, hist){
 
 // ---------- Rendering ----------
 function render(){
+  if(roundInProgress) saveInProgressRound(); // fire-and-forget; every state change flows through render()
   if(inBagSetupWizard){
     app.innerHTML = renderBagSetupView();
     attachHandlers();
@@ -4278,6 +4304,7 @@ function attachHandlers(){
     };
     saveBtn.textContent = 'Saving…';
     await saveRoundToStorage(summary, round);
+    await clearInProgressRound();
 
     // Freeform rounds (no saved course tied to them) already have par for
     // every hole entered — offer to turn that into a reusable course template.
