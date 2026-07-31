@@ -28,9 +28,17 @@
     --gold:#A6822F;
     --gold-pale:#EFE4C4;
     --radius:10px;
+    /* Four bands, light to dark, matching what the tap classifier actually
+       reports: green -> fairway -> first cut -> heavy rough (the background). */
     --turf-green:#CFE3A6; --turf-green-edge:#9FBE74;
-    --turf-fairway:#A9C486; --turf-fairway-edge:#8AAB69; --turf-fairway-stripe:#B7D093;
-    --turf-rough:#5B7A4C; --turf-tee:#EFE4C4;
+    /* The fringe is a SHADE OF FAIRWAY, not a lie of its own — it is drawn
+       strictly inside the fairway's rounded mouth so it never straddles the
+       fairway/first-cut boundary (see GREEN_FRINGE_YARDS). */
+    --turf-fringe:#C0D89B;
+    --turf-fairway:#A9C486; --turf-fairway-edge:#8AAB69;
+    --turf-firstcut:#7E9C61;
+    --turf-rough:#4E6B41;
+    --turf-tee:#EFE4C4;
   }
   *{box-sizing:border-box;}
   body{
@@ -547,8 +555,12 @@
   .empty-log{ font-size:11.5px; color:var(--ink-soft); font-style:italic; padding:5px 0; }
 
   .quick-mode-link{ display:block; text-align:center; margin:10px 20px 0; font-size:11.5px; color:var(--ink-soft); text-decoration:underline; cursor:pointer; background:none; border:none; }
-  .setup-preview{ border-radius:12px; overflow:hidden; border:1px solid var(--line); margin:4px 0 14px; background:var(--turf-rough); max-width:260px; margin-left:auto; margin-right:auto; }
-  .setup-preview svg{ display:block; width:100%; height:auto; }
+  /* Fixed height (rather than height:auto off the viewBox aspect) so the
+     preview is a tidy card at roughly the live view's proportions — at true
+     scale a 400y hole made this a ~780px-tall sliver. Keep in sync with
+     SETUP_PREVIEW_W/H, which the diagram's stretch math uses. */
+  .setup-preview{ border-radius:12px; overflow:hidden; border:1px solid var(--line); margin:4px 0 14px; background:var(--turf-rough); width:260px; height:300px; margin-left:auto; margin-right:auto; }
+  .setup-preview svg{ display:block; width:100%; height:100%; }
 
   /* Ledger table */
   .ledger-wrap{padding:8px 20px 4px;overflow-x:auto;}
@@ -743,7 +755,7 @@
 <script>
 const CLUBS = ["Driver","Fairway Wood","Hybrid","Long Iron (3-5)","Mid Iron (6-7)","Short Iron (8-9)","Wedge"];
 const APPROACH_RANGES = ["<50","50-100","100-150","150-200","200+"];
-const APP_VERSION = '2.1.6';
+const APP_VERSION = '2.2.0';
 
 function blankHole(par){
   return {
@@ -773,12 +785,31 @@ function blankCourseHoles(){
 // par 4/5 pick any of these five, rendered at whatever yardage the hole is.
 const HOLE_SHAPES = {
   straight:  { label:'Straight',          style:'straight' },
-  dogleg_l:  { label:'Dogleg Left',        style:'corner', dir:-1, turnAngleDeg:38, cornerT:0.56, blendYards:26 },
-  dogleg_r:  { label:'Dogleg Right',       style:'corner', dir: 1, turnAngleDeg:38, cornerT:0.56, blendYards:26 },
-  bend_l:    { label:'Slight Bend Left',   style:'sweep',  dir:-1, bendYards:55 },
-  bend_r:    { label:'Slight Bend Right',  style:'sweep',  dir: 1, bendYards:55 }
+  // The centreline SHIFTS sideways by offsetYards between shiftFrom and shiftTo
+  // (as a fraction of the hole), and runs vertically before and after. That's
+  // the shape of a real dogleg — two roughly parallel legs with a lateral step
+  // between them — and it's what the reference drawing does.
+  //
+  // A previous version made this a bulge that peaked and returned to zero,
+  // which doubled the apparent swing (out AND back) and read as a banana.
+  // Offsets are tuned so that AFTER the lateral exaggeration the bend occupies
+  // the same fraction of the frame as the reference (~15% of hole length).
+  // A dogleg turns ONCE at the corner and then runs straight at the green on the
+  // new line — it does not straighten back up. Using the shift model for these
+  // gave a vertical-diagonal-vertical S, which is not what a dogleg looks like.
+  // cornerT sits past halfway so you drive well up the hole before the turn,
+  // and the shorter remaining leg makes the angle sharper for the same offset.
+  dogleg_l:  { label:'Dogleg Left',        style:'corner', dir:-1, offsetYards:55, cornerT:0.52, filletT:0.13 },
+  dogleg_r:  { label:'Dogleg Right',       style:'corner', dir: 1, offsetYards:55, cornerT:0.52, filletT:0.13 },
+  bend_l:    { label:'Slight Bend Left',   style:'shift', dir:-1, offsetYards:20, shiftFrom:0.10, shiftTo:0.90 },
+  bend_r:    { label:'Slight Bend Right',  style:'shift', dir: 1, offsetYards:20, shiftFrom:0.10, shiftTo:0.90 },
+  // Same shift model as a slight bend, but over a tighter middle stretch and a
+  // bigger step — so it reads as a distinct S: straight, shift across, straight
+  // again into the green. A dogleg by contrast turns once and stays angled.
+  scurve_l:  { label:'S-Curve Left',       style:'shift', dir:-1, offsetYards:40, shiftFrom:0.34, shiftTo:0.74 },
+  scurve_r:  { label:'S-Curve Right',      style:'shift', dir: 1, offsetYards:40, shiftFrom:0.34, shiftTo:0.74 }
 };
-const HOLE_SHAPE_ORDER = ['straight','dogleg_l','dogleg_r','bend_l','bend_r'];
+const HOLE_SHAPE_ORDER = ['straight','dogleg_l','dogleg_r','bend_l','bend_r','scurve_l','scurve_r'];
 function girMissAbbrev(h){
   const dist = {short:'S', long:'Lg'}[h.girMissDist||''] || '';
   const dir = {left:'L', right:'R'}[h.girMissDir||''] || '';
@@ -907,29 +938,122 @@ function renderFairwayDiagram(id, opts){
 // the hole-setup preview and the live shot-by-shot tracking screen.
 const HOLE_CANVAS_PAD = 30;        // yards of tap-room kept clear beyond the fairway's own footprint, on every side
 const HOLE_MIN_CANVAS_WIDTH = 150; // even a straight hole gets at least this much lateral room
-const HOLE_MARGIN_TEE = 14;        // room shown below the tee marker
-const HOLE_MARGIN_GREEN = 38;      // room shown PAST the green, in case of a long hit through it
+const HOLE_MARGIN_TEE = 44;        // room shown below the tee marker (must clear the rough's bottom lobe AND the tee pad)
+const HOLE_MARGIN_GREEN = 40;      // room shown PAST the green, in case of a long hit through it
 const HOLE_DISTANCE_MARKERS = [250,200,150,100];
+// The first cut is drawn as its own rounded silhouette hugging the fairway; the
+// darker background beyond it is heavy rough — a big miss. The band's width is
+// the SAME constant nearestHoleLie uses for its 'First cut' test, so the three
+// colours you see are exactly the three lies the app will record.
+const HOLE_FIRST_CUT_YARDS = 16;
+// Width of the fringe collar around the green. It plays as fairway and IS
+// classified as fairway; the ring is only a shade, drawn strictly inside the
+// fairway mouth so it can never span a lie boundary. The mouth is kept wide
+// enough that the ring and the mouth's own rounded edge stay clearly apart —
+// at nearly equal radii the two outlines collided into mush in the green view.
+const GREEN_FRINGE_YARDS = 3;
+// The first-cut ribbon's own semicircular cap already reaches ~28y below its
+// last point, so a short tail is all that's needed to get a big round lobe —
+// a longer one just pushed the cap off the bottom of the canvas.
+const HOLE_ROUGH_TAIL = 12;        // how far the first-cut lobe extends below the tee
+const HOLE_TEE_YH = -28;           // tee pad sits BELOW the fairway's rounded start, in its own lobe
+const HOLE_ROUGH_HEAD = 24;        // ...and beyond the green
 
 function holeSmoothstep(t){ return t*t*(3-2*t); }
-function holeCenterlineX(yh, yardage, shape){
-  if(shape.style==='straight') return 0;
-  if(shape.style==='corner'){
-    const cornerY = shape.cornerT*yardage;
-    const half = shape.blendYards/2;
-    const slope = Math.tan(shape.turnAngleDeg*Math.PI/180) * shape.dir;
-    if(yh<=cornerY-half) return 0;
-    if(yh>=cornerY+half) return (yh-cornerY)*slope;
-    const u = (yh-(cornerY-half))/(2*half);
-    return holeSmoothstep(u) * (half*slope);
+// Joins a sampled point list with cubic Béziers (Catmull-Rom control points)
+// instead of straight `L` segments. The outline used to be 65 samples joined
+// corner-to-corner, which read as a faceted hand-drawn polygon — most visibly
+// as a hard kink at a dogleg's corner. Same sample points, curved joins.
+function holeSmoothSegs(pts, tension){
+  const k = (tension==null?1:tension)/6;
+  let d = '';
+  for(let i=0;i<pts.length-1;i++){
+    const p0 = pts[i-1] || pts[i];
+    const p1 = pts[i], p2 = pts[i+1];
+    const p3 = pts[i+2] || p2;
+    const c1x = p1.x + (p2.x-p0.x)*k, c1y = p1.y + (p2.y-p0.y)*k;
+    const c2x = p2.x - (p3.x-p1.x)*k, c2y = p2.y - (p3.y-p1.y)*k;
+    d += `C${c1x.toFixed(2)},${c1y.toFixed(2)} ${c2x.toFixed(2)},${c2y.toFixed(2)} ${p2.x.toFixed(2)},${p2.y.toFixed(2)}`;
   }
-  if(shape.style==='sweep') return shape.dir*shape.bendYards*holeSmoothstep(yh/yardage);
-  return 0;
+  return d;
 }
+// A closed "ribbon" running tee-to-green: up the left edge, a semicircular cap
+// over the green end, back down the right edge, another cap under the tee end.
+// The rounded caps are what stop the fairway and the rough looking like they've
+// been cut off with scissors at both ends.
+// pts: [{cx, yh, hw}] ordered tee -> green.
+function holeRibbonPath(pts, svgY){
+  const left  = pts.map(p=>({x:p.cx-p.hw, y:svgY(p.yh)}));
+  const right = pts.map(p=>({x:p.cx+p.hw, y:svgY(p.yh)})).reverse();
+  const rHead = pts[pts.length-1].hw, rTail = pts[0].hw;
+  // sweep=1 on both: from the left edge it arcs over the top, and from the
+  // right edge it arcs under the bottom.
+  return `M${left[0].x.toFixed(2)},${left[0].y.toFixed(2)}`
+    + holeSmoothSegs(left)
+    + `A${rHead.toFixed(2)},${rHead.toFixed(2)} 0 0 1 ${right[0].x.toFixed(2)},${right[0].y.toFixed(2)}`
+    + holeSmoothSegs(right)
+    + `A${rTail.toFixed(2)},${rTail.toFixed(2)} 0 0 1 ${left[0].x.toFixed(2)},${left[0].y.toFixed(2)}Z`;
+}
+// Lateral exaggeration. A 400-yard hole is ~8:1 long-to-wide in reality, which
+// on a portrait phone card renders as a thin ribbon with a screenful of wasted
+// rough either side. Scorecard and yardage-book hole diagrams don't draw to
+// true scale either — each hole is fitted to its own roughly-portrait box, with
+// length compressed and width exaggerated. Same approach here: the viewBox is
+// narrowed to the hole's own footprint plus a margin, then stretched to fill
+// the card (see renderLiveHoleView). Capped so a straight hole doesn't get
+// blown out, and so a dogleg's turn stays the severity it actually is.
+const HOLE_LATERAL_MARGIN = 30;  // yards of rough kept either side of the hole's footprint (also the tap room for a wild miss)
+// Only ever binds on narrow holes (a straight one is a plain ribbon, so
+// widening it invents nothing). Holes with real lateral travel — the doglegs —
+// are limited by their own footprint well before this, so raising it doesn't
+// touch how severe a dogleg looks.
+const HOLE_MAX_STRETCH = 1.75;  // chosen so the silhouette fills the same fraction of the card as the reference does of its page
+// Lateral offset of the fairway centreline from the straight tee-to-green line,
+// at a point yh yards up the hole. Zero at the tee and zero again at the green
+// (the green sits directly up the line from the tee, so a hole's stated yardage
+// IS its tee-to-green distance), peaking at the dogleg/bend.
+//
+// sin(pi*u/2) rises almost linearly off each end and flattens to zero slope at
+// the peak, so the two legs read straight-ish and the corner is rounded — and
+// because the slope is zero on both sides of the peak, the joint is smooth
+// rather than a kink.
+// Lateral position of the fairway centreline at fraction t up the hole. Zero at
+// the tee, the shape's full offset at the green, with a smoothstep in between —
+// so both legs run vertically and the turn is a rounded step, not a kink.
+function holeCenterlineX(t, shape){
+  if(!shape.offsetYards) return 0;
+  if(shape.style==='corner'){
+    // Straight off the tee to the corner, then one turn onto a straight angled
+    // leg that runs at the green. The fillet is parabolic so it leaves the
+    // first leg at slope 0 and joins the second at exactly its slope — tangent
+    // to both, so the corner is rounded rather than kinked.
+    const c = shape.cornerT, h = shape.filletT;
+    const k = shape.offsetYards/(1-c);         // lateral yards gained per unit t on the second leg
+    if(t <= c-h) return 0;
+    if(t >= c+h) return shape.dir * k * (t-c);
+    const u = (t-(c-h))/(2*h);
+    return shape.dir * u*u * h*k;
+  }
+  // A gentle bend: one continuous curve, vertical at both ends.
+  const span = shape.shiftTo - shape.shiftFrom;
+  const u = span>0 ? Math.min(Math.max((t-shape.shiftFrom)/span, 0), 1) : (t>=shape.shiftTo?1:0);
+  return shape.dir * shape.offsetYards * holeSmoothstep(u);
+}
+// A fairway ribbon: narrow off the tee, up to full width quickly, then flaring
+// a little to meet the green. The old profile was sin(pi*t) — narrow at both
+// ends, widest in the middle — which is a lens, and once the diagram was
+// stretched laterally that bulge read as a bloated pod rather than a fairway.
+// The flare at the top also stops the green sitting on the corridor like a bulb
+// on a stick; it now opens into a mouth that's wider than the green itself.
+// Measured off the reference drawing: at ~4px/yard its fairway is ~38 yards
+// across with a ~16-yard band of first cut either side (70 yards overall).
 function holeCorridorWidth(t, isPar3){
-  const wMin = isPar3? 23:30, wMax = isPar3? 31:51;
-  const tc = Math.min(Math.max(t,0.045),0.955);
-  return wMin + (wMax-wMin)*Math.pow(Math.sin(Math.PI*tc), 0.68);
+  const wTee   = isPar3 ? 20 : 24;
+  const wFull  = isPar3 ? 28 : 38;
+  const wGreen = isPar3 ? 42 : 44;
+  const inRamp  = holeSmoothstep(Math.min(Math.max(t,0)/0.15, 1));
+  const outRamp = holeSmoothstep(Math.min(Math.max((t-0.78)/0.22, 0), 1));
+  return wTee + (wFull-wTee)*inRamp + (wGreen-wFull)*outRamp;
 }
 // Builds the fairway polygon, green/tee position, a sampled centerline (for
 // lie lookups), and an adaptive viewBox padded on BOTH sides of wherever the
@@ -938,37 +1062,57 @@ function holeCorridorWidth(t, isPar3){
 // it turns.
 function buildHoleLayout(shapeId, yardage, isPar3){
   const shape = HOLE_SHAPES[shapeId] || HOLE_SHAPES.straight;
-  const totalH = yardage + HOLE_MARGIN_TEE + HOLE_MARGIN_GREEN;
+  // The green ends up offset sideways, so it can't also sit `yardage` yards
+  // straight up — that would make the real tee-to-green distance longer than
+  // the hole's own yardage (a 410y dogleg used to measure 433y from the tee).
+  // Pull its vertical position in so the straight-line distance IS the yardage.
+  const greenCx = holeCenterlineX(1, shape);
+  const greenYh = Math.sqrt(Math.max(yardage*yardage - greenCx*greenCx, 1));
+  const totalH = greenYh + HOLE_MARGIN_TEE + HOLE_MARGIN_GREEN;
   const svgY = yh => totalH - HOLE_MARGIN_TEE - yh;
-  const N = 64;
+  const N = 120; // enough resolution that a dogleg's rounded corner is actually sampled
   const samples = [];
-  const left = [], right = [];
-  let minX = Infinity, maxX = -Infinity;
   for(let i=0;i<=N;i++){
     const t = i/N;
-    const yh = t*yardage;
-    const cx = holeCenterlineX(yh, yardage, shape);
-    const w = holeCorridorWidth(t, isPar3);
-    samples.push({t, yh, cx, w});
-    const l = cx-w/2, r = cx+w/2;
-    left.push(`${l.toFixed(2)},${svgY(yh).toFixed(2)}`);
-    right.push(`${r.toFixed(2)},${svgY(yh).toFixed(2)}`);
-    if(l<minX) minX=l;
-    if(r>maxX) maxX=r;
+    samples.push({t, yh: t*greenYh, cx: holeCenterlineX(t, shape), w: holeCorridorWidth(t, isPar3)});
   }
-  const fairwayD = `M${left.join('L')}L${right.reverse().join('L')}Z`;
-  const greenCx = holeCenterlineX(yardage, yardage, shape);
-  const greenY = svgY(yardage);
+  const fairwayD = holeRibbonPath(samples.map(s=>({cx:s.cx, yh:s.yh, hw:s.w/2})), svgY);
+
+  // The first cut hugs the fairway at a constant margin and runs past both
+  // ends, giving the rounded lobes the tee sits in and the green nestles into.
+  const roughPts = [];
+  const M = 24;
+  for(let i=M;i>0;i--){ // tail, below the tee
+    roughPts.push({cx: 0, yh: -HOLE_ROUGH_TAIL*(i/M), hw: holeCorridorWidth(0,isPar3)/2 + HOLE_FIRST_CUT_YARDS});
+  }
+  samples.forEach(s=>roughPts.push({cx:s.cx, yh:s.yh, hw:s.w/2 + HOLE_FIRST_CUT_YARDS}));
+  for(let i=1;i<=M;i++){ // head, past the green
+    roughPts.push({cx: greenCx, yh: greenYh + HOLE_ROUGH_HEAD*(i/M), hw: holeCorridorWidth(1,isPar3)/2 + HOLE_FIRST_CUT_YARDS});
+  }
+  const roughD = holeRibbonPath(roughPts, svgY);
+
+  let minX = Infinity, maxX = -Infinity;
+  roughPts.forEach(p=>{ minX = Math.min(minX, p.cx-p.hw); maxX = Math.max(maxX, p.cx+p.hw); });
+  const greenY = svgY(greenYh);
   minX = Math.min(minX, greenCx-GREEN_RADIUS_YARDS);
   maxX = Math.max(maxX, greenCx+GREEN_RADIUS_YARDS);
-  const teeCx = 0, teeY = svgY(0);
+  const teeCx = 0, teeY = svgY(HOLE_TEE_YH);
   let viewMinX = minX-HOLE_CANVAS_PAD, viewMaxX = maxX+HOLE_CANVAS_PAD;
   const rawW = viewMaxX-viewMinX;
   if(rawW < HOLE_MIN_CANVAS_WIDTH){
     const extra = (HOLE_MIN_CANVAS_WIDTH-rawW)/2;
     viewMinX -= extra; viewMaxX += extra;
   }
-  return { shapeId, shape, isPar3, totalH, svgY, samples, fairwayD, greenCx, greenY, teeCx, teeY, yardage, viewMinX, viewMaxX };
+  // holeMinX/holeMaxX are the hole's own tight footprint (fairway + green, no
+  // padding) — what the lateral-exaggeration fit measures against.
+  // viewMinX/viewMaxX stay the padded, true-scale bounds used by the setup
+  // preview and as the floor for the live view's own width math.
+  // yardage = the hole's stated (straight-line tee-to-green) distance.
+  // greenYh = how far UP the canvas the green sits, which is less than the
+  // yardage whenever the green is offset sideways. All distance math uses
+  // greenYh; only labels use yardage.
+  return { shapeId, shape, isPar3, totalH, svgY, samples, fairwayD, roughD, greenCx, greenY, greenYh, teeCx, teeY, yardage,
+           holeMinX:minX, holeMaxX:maxX, viewMinX, viewMaxX };
 }
 function nearestHoleLie(hole, xh, yh){
   let best=null, bestD=Infinity;
@@ -982,7 +1126,7 @@ function nearestHoleLie(hole, xh, yh){
   const a = Math.abs(lateral);
   let lie;
   if(a<=half) lie='Fairway';
-  else if(a<=half+11) lie='First cut';
+  else if(a<=half+HOLE_FIRST_CUT_YARDS) lie='First cut';
   else lie='Rough';
   return {lie, lateral};
 }
@@ -991,65 +1135,117 @@ function nearestHoleLie(hole, xh, yh){
 // severity relative to the green — used by deriveHoleSummaryFields to keep
 // the existing GIR/FIR/lie insight fields populated from shots[].
 function classifyHoleShot(hole, xh, yh){
-  const distToGreen = Math.sqrt((xh-hole.greenCx)**2 + (yh-hole.yardage)**2);
+  const distToGreen = Math.sqrt((xh-hole.greenCx)**2 + (yh-hole.greenYh)**2);
   const onGreen = distToGreen <= GREEN_RADIUS_YARDS;
   const near = nearestHoleLie(hole, xh, yh);
   const lieId = onGreen ? 'green' : ({Fairway:'fairway','First cut':'lightrough',Rough:'heavyrough'}[near.lie] || 'heavyrough');
   const severity = distToGreen<=GREEN_NEAR_MISS_YARDS ? 'near' : 'bad';
   return { lieId, onGreen, distToGreen, lateral:near.lateral };
 }
-function holeDistanceRingsSvg(hole){
-  return HOLE_DISTANCE_MARKERS.filter(d => d < hole.yardage-10 && d > GREEN_NEAR_MISS_YARDS+8).map(d=>{
-    const labelYh = Math.max(0, hole.yardage-d);
-    const lx = holeCenterlineX(labelYh, hole.yardage, hole.shape);
-    const ly = hole.svgY(labelYh);
-    return `<circle cx="${hole.greenCx}" cy="${hole.greenY}" r="${d}" fill="none" stroke="rgba(255,255,255,0.4)" stroke-width="0.3" stroke-dasharray="1.1,2.4"/>
-      <text x="${lx.toFixed(1)}" y="${(ly+1.4).toFixed(1)}" text-anchor="middle" font-size="4.4" font-family="IBM Plex Mono, monospace" font-weight="700" fill="rgba(255,255,255,0.85)" style="paint-order:stroke; stroke:rgba(20,30,20,0.45); stroke-width:0.9; stroke-linejoin:round;">${d}</text>`;
+// Yardage-to-the-green markers, drawn as a short tick across the fairway with
+// the number beside it rather than a full sweeping arc — the arcs read as
+// clutter across the whole canvas, and their labels sat mid-fairway in the way
+// of the shot you're trying to place.
+//
+// u: one screen pixel expressed in user units (see renderHoleShapeSvg), so type
+// is a real px size instead of a size in yards — sizing in yards is why a short
+// par 3 was rendering a giant "100" and a long par 5 a tiny one.
+// kx: the lateral exaggeration, divided back out of anything that is type.
+function holeDistanceRingsSvg(hole, u, kx){
+  u = u || 1; kx = kx || 1;
+  const distTo = s => Math.sqrt((s.cx-hole.greenCx)**2 + (s.yh-hole.greenYh)**2);
+  return HOLE_DISTANCE_MARKERS.filter(d => d < hole.yardage-25 && d > 60).map(d=>{
+    // Walk the centreline to where the straight-line distance to the green is
+    // actually d — on a dogleg that is NOT simply d yards down the canvas.
+    const s = hole.samples.reduce((a,b)=>Math.abs(distTo(b)-d)<Math.abs(distTo(a)-d)?b:a);
+    const lx = s.cx;
+    const ly = hole.svgY(s.yh);
+    const half = s.w/2;
+    const fs = 10*u;
+    return `<line x1="${(lx-half).toFixed(2)}" y1="${ly.toFixed(2)}" x2="${(lx+half).toFixed(2)}" y2="${ly.toFixed(2)}" stroke="rgba(255,255,255,0.5)" stroke-width="1" vector-effect="non-scaling-stroke" stroke-dasharray="4,4"/>
+      <text x="${(lx+half).toFixed(2)}" y="${ly.toFixed(2)}" text-anchor="start" dominant-baseline="middle" font-size="${fs.toFixed(2)}" font-family="IBM Plex Mono, monospace" font-weight="600" fill="rgba(255,255,255,0.82)" transform="translate(${(lx+half).toFixed(2)},${ly.toFixed(2)}) scale(${(1/kx).toFixed(4)},1) translate(${(-(lx+half)).toFixed(2)},${(-ly).toFixed(2)})"><tspan dx="${(5*u).toFixed(2)}">${d}</tspan></text>`;
   }).join('');
 }
-// opts: {id, viewBox, shots:[{xh,yh}], pending:{xh,yh}|null, small:bool}
+// opts: {id, viewBox, zoom, stretch, shots:[{xh,yh}], pending:{xh,yh}|null, small:bool}
 function renderHoleShapeSvg(hole, opts){
   opts = opts || {};
   const vb = opts.viewBox || `${hole.viewMinX} 0 ${hole.viewMaxX-hole.viewMinX} ${hole.totalH}`;
-  const sw = opts.small ? 1.1 : 0.55;
-  // Shot dots and the pending marker are UI elements, not real-world-sized
-  // things like the green or fairway — at whatever yard-radius looks right in
-  // the whole-hole view, they'd look comically oversized once zoomed into the
-  // green view's much shorter viewBox. opts.zoom (viewBox height the caller is
-  // using, relative to the whole-hole height) lets them shrink back down to a
-  // sensible on-screen size instead of staying a fixed size in yards.
-  const mz = opts.zoom || 1;
-  const stripes = [];
-  if(!opts.small){
-    for(let i=1;i<9;i++){
-      const t=i/9, yh=t*hole.yardage, y=hole.svgY(yh);
-      if(i%2===0) stripes.push(`<rect x="${hole.viewMinX}" y="${(y-hole.yardage/9/2).toFixed(1)}" width="${hole.viewMaxX-hole.viewMinX}" height="${(hole.yardage/9).toFixed(1)}" fill="var(--turf-fairway-stripe)" opacity="0.45"/>`);
-    }
-  }
+  const vbn = vb.trim().split(/\s+/).map(Number);
+  const vX = vbn[0], vY = vbn[1], vW = vbn[2], vH = vbn[3];
+
+  // Lateral exaggeration in force (1 = true scale). The whole map stretches
+  // sideways, so anything that's a real-world AREA — fairway, green, apron —
+  // stretches with it and stays proportionally honest against its
+  // surroundings. Anything that's a SYMBOL rather than terrain (ball markers,
+  // the flag, the cup, tee blocks, type) gets its x-dimensions divided back
+  // out, so a marker stays a round dot instead of smearing into an oval.
+  const kx = opts.stretch || 1;
+  // One rendered pixel, in user units. Sizing symbols and type in YARDS is why
+  // a short par 3 rendered a giant "100" and yardage labels came out ~5px on a
+  // phone: a fixed yard size is a different screen size on every hole and at
+  // every zoom. Everything non-terrain is sized off this instead.
+  const u = vH / (opts.pxH || 480);
+  const uid = opts.id;
+  // Strokes are px-constant: under a non-uniform scale a plain stroke-width
+  // renders thinner on vertical edges than horizontal ones.
+  const stroke = (px, extra) => `stroke-width="${px}" vector-effect="non-scaling-stroke"${extra||''}`;
+  // Counter-scales a symbol horizontally so the lateral stretch doesn't distort it.
+  const unsq = (cx, cy) => `transform="translate(${cx.toFixed(2)},${cy.toFixed(2)}) scale(${(1/kx).toFixed(4)},1) translate(${(-cx).toFixed(2)},${(-cy).toFixed(2)})"`;
+
   const shots = (opts.shots||[]).map((s,i)=>{
     const y = hole.svgY(s.yh);
-    const r = (opts.small?2.6:2.3)/mz;
-    return `<circle cx="${s.xh.toFixed(2)}" cy="${y.toFixed(2)}" r="${r.toFixed(2)}" fill="var(--green-deep)" stroke="#fff" stroke-width="${(opts.small?0.6:0.55)/mz}"/>
-      ${opts.small?'':`<text x="${s.xh.toFixed(2)}" y="${(y-3.4/mz).toFixed(2)}" text-anchor="middle" font-size="${(4/mz).toFixed(2)}" font-family="IBM Plex Mono, monospace" fill="var(--ink)" font-weight="700">${i+1}</text>`}`;
+    const r = (opts.small?6:8)*u;
+    return `<g ${unsq(s.xh, y)}>
+      <circle cx="${s.xh.toFixed(2)}" cy="${y.toFixed(2)}" r="${r.toFixed(2)}" fill="var(--green-deep)" ${stroke(1.5, ' stroke="#fff"')}/>
+      ${opts.small?'':`<text x="${s.xh.toFixed(2)}" y="${y.toFixed(2)}" text-anchor="middle" dominant-baseline="central" font-size="${(9*u).toFixed(2)}" font-family="IBM Plex Mono, monospace" fill="#fff" font-weight="700">${i+1}</text>`}
+    </g>`;
   }).join('');
-  const pendingPos = opts.pending || {xh:0, yh:0};
-  const pendingDot = opts.small ? '' : `<circle id="${opts.id}-pendingMarker" cx="${pendingPos.xh.toFixed(2)}" cy="${hole.svgY(pendingPos.yh).toFixed(2)}" r="${(3.1/mz).toFixed(2)}" fill="var(--gold)" stroke="#fff" stroke-width="${(0.7/mz).toFixed(2)}" opacity="${opts.pending?1:0}"/>`;
 
-  return `<svg id="${opts.id}" viewBox="${vb}" preserveAspectRatio="xMidYMid slice" style="background:var(--turf-rough);display:block;width:100%;height:100%;">
-    <defs><clipPath id="fw-${opts.id}"><path d="${hole.fairwayD}"/></clipPath></defs>
+  const pendingPos = opts.pending || {xh:0, yh:0};
+  const pr = 9*u;
+  const pendingDot = opts.small ? '' : `<g id="${uid}-pendingMarker" transform="translate(${pendingPos.xh.toFixed(2)},${hole.svgY(pendingPos.yh).toFixed(2)})" opacity="${opts.pending?1:0}">
+      <g transform="scale(${(1/kx).toFixed(4)},1)">
+        <circle cx="0" cy="0" r="${pr.toFixed(2)}" fill="var(--gold)" ${stroke(2, ' stroke="#fff"')}/>
+      </g>
+    </g>`;
+
+  // The green is drawn as a perfect circle on screen, so its lateral radius is
+  // counter-scaled like the other symbols. In the stretched whole-hole view
+  // that makes it a marker for "the green is here" rather than a to-scale
+  // footprint — fine placement is what the 1:1 green view is for, and there the
+  // stretch is 1 so the drawn circle IS the real 15-yard radius.
+  //
+  // The fringe collar around it is a shade of fairway, not a lie of its own,
+  // and is sized to sit well inside the fairway mouth's own rounded cap — an
+  // earlier version drew it at almost exactly the cap's radius, so the two
+  // outlines collided into mush once you zoomed into the green view.
+  const gr = GREEN_RADIUS_YARDS;
+  const flagH = 26*u, flagW = 13*u;
+
+  return `<svg id="${uid}" viewBox="${vb}" preserveAspectRatio="none" style="display:block;width:100%;height:100%;">
+    <rect x="${(vX-vW).toFixed(1)}" y="${(vY-vH).toFixed(1)}" width="${(vW*3).toFixed(1)}" height="${(vH*3).toFixed(1)}" fill="var(--turf-rough)"/>
+    <path d="${hole.roughD}" fill="var(--turf-firstcut)"/>
     <path d="${hole.fairwayD}" fill="var(--turf-fairway)"/>
-    <g clip-path="url(#fw-${opts.id})">${stripes.join('')}</g>
-    <path d="${hole.fairwayD}" fill="none" stroke="var(--turf-fairway-edge)" stroke-width="${sw}"/>
-    ${opts.small?'':holeDistanceRingsSvg(hole)}
-    ${opts.small?'':`<circle cx="${hole.greenCx}" cy="${hole.greenY}" r="${GREEN_NEAR_MISS_YARDS}" fill="none" stroke="rgba(255,255,255,0.5)" stroke-dasharray="1.4,1.6" stroke-width="0.35"/>`}
-    <ellipse cx="${hole.greenCx}" cy="${hole.greenY}" rx="${GREEN_RADIUS_YARDS}" ry="${GREEN_RADIUS_YARDS*0.86}" fill="var(--turf-green)" stroke="var(--turf-green-edge)" stroke-width="${sw}"/>
-    <g transform="translate(${hole.greenCx},${hole.greenY})">
-      <line x1="0" y1="0" x2="0" y2="${-GREEN_RADIUS_YARDS*0.62}" stroke="var(--ink)" stroke-width="${sw*0.9}"/>
-      <path d="M0,${-GREEN_RADIUS_YARDS*0.62} l${GREEN_RADIUS_YARDS*0.42},${GREEN_RADIUS_YARDS*0.16} l${-GREEN_RADIUS_YARDS*0.42},${GREEN_RADIUS_YARDS*0.16}z" fill="var(--gold)"/>
+
+    ${opts.small?'':holeDistanceRingsSvg(hole, u, kx)}
+
+    <ellipse cx="${hole.greenCx}" cy="${hole.greenY}" rx="${((gr+GREEN_FRINGE_YARDS)/kx).toFixed(2)}" ry="${(gr+GREEN_FRINGE_YARDS).toFixed(2)}" fill="var(--turf-fringe)"/>
+    <ellipse cx="${hole.greenCx}" cy="${hole.greenY}" rx="${(gr/kx).toFixed(2)}" ry="${gr.toFixed(2)}" fill="var(--turf-green)"/>
+
+    ${opts.small?'':`<g ${unsq(hole.greenCx, hole.greenY)}>
+      <circle cx="${hole.greenCx}" cy="${hole.greenY}" r="${(1.6*u).toFixed(2)}" fill="rgba(34,50,32,0.55)"/>
+      <line x1="${hole.greenCx}" y1="${hole.greenY}" x2="${hole.greenCx}" y2="${(hole.greenY-flagH).toFixed(2)}" ${stroke(1.6, ' stroke="#FBF9F2"')}/>
+      <path d="M${hole.greenCx},${(hole.greenY-flagH).toFixed(2)} l${flagW.toFixed(2)},${(flagH*0.24).toFixed(2)} l${(-flagW).toFixed(2)},${(flagH*0.24).toFixed(2)}z" fill="var(--red)"/>
+    </g>`}
+
+    <g ${unsq(hole.teeCx, hole.teeY)}>
+      ${(()=>{ const tw = (opts.small?20:24)*u, th = (opts.small?17:20)*u, dr = th*0.10, dx = tw*0.34;
+        return `<rect x="${(hole.teeCx-tw/2).toFixed(2)}" y="${(hole.teeY-th/2).toFixed(2)}" width="${tw.toFixed(2)}" height="${th.toFixed(2)}" rx="${(th*0.34).toFixed(2)}" fill="var(--turf-green)"/>
+        <circle cx="${(hole.teeCx-dx).toFixed(2)}" cy="${hole.teeY.toFixed(2)}" r="${dr.toFixed(2)}" fill="var(--turf-rough)"/>
+        <circle cx="${(hole.teeCx+dx).toFixed(2)}" cy="${hole.teeY.toFixed(2)}" r="${dr.toFixed(2)}" fill="var(--turf-rough)"/>`;
+      })()}
     </g>
-    <g transform="translate(${hole.teeCx},${hole.teeY})">
-      <rect x="-3.6" y="-1.3" width="7.2" height="2.6" rx="1.2" fill="var(--turf-tee)" stroke="var(--turf-fairway-edge)" stroke-width="${sw*0.7}"/>
-    </g>
+
     ${shots}
     ${pendingDot}
   </svg>`;
@@ -1128,7 +1324,7 @@ function deriveHoleSummaryFields(h){
 
   h.club = approachShot.club;
   h.gir = ac.onGreen ? 'hit' : 'miss';
-  h.girTap = { long: approachShot.yh-hole.yardage, lateral: approachShot.xh-hole.greenCx };
+  h.girTap = { long: approachShot.yh-hole.greenYh, lateral: approachShot.xh-hole.greenCx };
   if(h.gir==='miss'){
     h.girMissDir = h.girTap.lateral>3 ? 'right' : h.girTap.lateral<-3 ? 'left' : 'center';
     h.girMissDist = h.girTap.long>3 ? 'long' : h.girTap.long<-3 ? 'short' : 'pin';
@@ -1145,7 +1341,7 @@ function deriveHoleSummaryFields(h){
   } else {
     h.approachLie = h.par===3 ? 'tee' : 'fairway';
   }
-  const remainAtOrigin = Math.sqrt((origin.xh-hole.greenCx)**2 + (origin.yh-hole.yardage)**2);
+  const remainAtOrigin = Math.sqrt((origin.xh-hole.greenCx)**2 + (origin.yh-hole.greenYh)**2);
   h.approachYards = Math.round(remainAtOrigin);
   h.approach = approachBucketFromYards(h.approachYards);
 }
@@ -3061,6 +3257,19 @@ function liveLieColor(lieId){
 }
 
 const SETUP_DEFAULT_YARDAGE = {3:155, 4:400, 5:530};
+const SETUP_PREVIEW_W = 260, SETUP_PREVIEW_H = 300; // must match .setup-preview's CSS box
+
+// Fits a hole into a fixed-size preview box using the same lateral-exaggeration
+// rule as the live view, so what you see while picking a shape is what you get
+// once you start the hole.
+function holePreviewFit(hole, boxW, boxH){
+  const pxPerYard = boxH / hole.totalH;
+  const trueScaleViewW = boxW / pxPerYard;
+  const footprintW = hole.holeMaxX - hole.holeMinX;
+  const viewW = Math.max(footprintW + HOLE_LATERAL_MARGIN*2, trueScaleViewW / HOLE_MAX_STRETCH);
+  const cx = (hole.holeMinX + hole.holeMaxX) / 2;
+  return { viewBox: `${cx - viewW/2} 0 ${viewW} ${hole.totalH}`, stretch: trueScaleViewW / viewW };
+}
 
 // Shown when you arrive at a hole that hasn't been set up yet — no shape
 // picked (freeform rounds, or a course hole nobody configured), no shots
@@ -3095,7 +3304,11 @@ function renderHoleSetupView(h, stats){
           ${HOLE_SHAPE_ORDER.map(id=>`<button data-setupshape="${id}" class="${h.shape===id?'sel':''}" style="flex:0 0 auto;padding:7px 9px;font-size:11.5px;">${HOLE_SHAPES[id].label}</button>`).join('')}
         </div>
       </div>` : `<div class="na-note">Par 3 — tee shot goes straight at the green, no shape to pick.</div>`}
-      <div class="setup-preview">${renderHoleShapeSvg(buildHoleLayout(h.shape, h.refYardage||SETUP_DEFAULT_YARDAGE[h.par], h.par===3), {id:'setupPreviewSvg'})}</div>
+      <div class="setup-preview">${(()=>{
+        const ph = buildHoleLayout(h.shape, h.refYardage||SETUP_DEFAULT_YARDAGE[h.par], h.par===3);
+        const fit = holePreviewFit(ph, SETUP_PREVIEW_W, SETUP_PREVIEW_H);
+        return renderHoleShapeSvg(ph, {id:'setupPreviewSvg', viewBox:fit.viewBox, stretch:fit.stretch, pxH:SETUP_PREVIEW_H});
+      })()}</div>
       <button class="finish-btn" id="startHoleBtn">Start This Hole</button>
       <button class="save-btn" id="setupQuickBtn" style="background:var(--paper-raised);color:var(--ink-soft);border:1px solid var(--line-strong);margin-top:8px;">Quick Entry Instead (score &amp; putts only)</button>
     </section>
@@ -3167,7 +3380,7 @@ function renderLiveHoleView(h, stats){
 
   const origin = currentLiveOrigin(h);
   const originLie = h.shots.length ? classifyHoleShot(hole, origin.xh, origin.yh) : {lieId:'tee'};
-  const remainFromOrigin = Math.sqrt((origin.xh-hole.greenCx)**2 + (origin.yh-hole.yardage)**2);
+  const remainFromOrigin = Math.sqrt((origin.xh-hole.greenCx)**2 + (origin.yh-hole.greenYh)**2);
   const onGreenNow = h.shots.length>0 && originLie.onGreen;
 
   shot.target = Math.max(1, Math.round(remainFromOrigin));
@@ -3192,30 +3405,29 @@ function renderLiveHoleView(h, stats){
     (typeof window!=='undefined'?window.innerHeight:700) - chromeH - LIVE_BOTTOM_SECTION_H));
   const pxPerYard = diagramHeightPx / hole.totalH;
 
-  // The card fills the screen's width regardless of how narrow the hole's own
-  // corridor is — a straight, unbent hole is only ~40-60 yards wide but 400+
-  // yards long, so sizing the card off the hole's own aspect ratio (like the
-  // height math above does) produced a tall skinny strip with huge wasted
-  // margins on a real phone. Instead, widen the viewBox beyond the hole's
-  // fairway bounds to match the screen, centered on the hole's own centerline
-  // — the extra space either side just renders as more rough (the SVG's own
-  // background), never stretching or cropping the hole itself. A genuinely
-  // wide hole (e.g. a sharp dogleg) still gets its own bounds if those exceed
-  // the screen width.
-  const holeWidthYards = hole.viewMaxX - hole.viewMinX;
-  const screenWidthPx = Math.min(typeof window!=='undefined'?window.innerWidth:390, 480) - LIVE_DIAGRAM_SIDE_MARGIN*2;
-  const viewWidthYards = Math.max(holeWidthYards, screenWidthPx / pxPerYard);
-  const cardWidthPx = viewWidthYards * pxPerYard;
-  const viewPadYards = (viewWidthYards - holeWidthYards) / 2;
-  const wholeViewMinX = hole.viewMinX - viewPadYards;
-  const wholeViewMaxX = hole.viewMaxX + viewPadYards;
+  // The card always fills the available width. What varies is how many yards
+  // of ground that width represents: the viewBox is narrowed to the hole's own
+  // footprint plus HOLE_LATERAL_MARGIN of rough either side, then stretched to
+  // fill — the scorecard/yardage-book convention (see HOLE_MAX_STRETCH). At
+  // true 1:1 a 400y hole left the fairway as a ~15%-of-width ribbon.
+  //
+  // The tap math needs nothing special for this: svgToHoleSpace inverts the
+  // viewBox mapping one axis at a time, so hole-space stays in true yards and
+  // every distance/lie calculation is unaffected by the stretch.
+  const cardWidthPx = Math.min(typeof window!=='undefined'?window.innerWidth:390, 480) - LIVE_DIAGRAM_SIDE_MARGIN*2;
+  const trueScaleViewW = cardWidthPx / pxPerYard;          // yards the width would span at 1:1
+  const footprintW = hole.holeMaxX - hole.holeMinX;
+  const wholeViewW = Math.max(footprintW + HOLE_LATERAL_MARGIN*2, trueScaleViewW / HOLE_MAX_STRETCH);
+  const footprintCx = (hole.holeMinX + hole.holeMaxX) / 2;
 
-  let viewBox, zoom = 1;
+  let viewBox, zoom = 1, stretch = 1;
   if(liveView==='whole'){
-    viewBox = `${wholeViewMinX} 0 ${wholeViewMaxX-wholeViewMinX} ${hole.totalH}`;
+    viewBox = `${footprintCx - wholeViewW/2} 0 ${wholeViewW} ${hole.totalH}`;
+    stretch = trueScaleViewW / wholeViewW;
   } else {
     // 65 (was 50) yards tall — the green (~26y across) was dominating the
-    // frame with barely any fringe/rough showing around it.
+    // frame with barely any fringe/rough showing around it. Kept at true 1:1
+    // (gw matches the card's aspect) so a green looks like a green.
     const gh = 65, gw = gh*(cardWidthPx/diagramHeightPx);
     viewBox = `${hole.greenCx-gw/2} ${Math.max(hole.greenY-gh*0.4,0)} ${gw} ${gh}`;
     zoom = hole.totalH / gh;
@@ -3233,7 +3445,7 @@ function renderLiveHoleView(h, stats){
   const confirmHtml = liveShotPending ? (()=>{
     const distJustHit = Math.sqrt((liveShotPending.xh-origin.xh)**2 + (liveShotPending.yh-origin.yh)**2);
     const c = classifyHoleShot(hole, liveShotPending.xh, liveShotPending.yh);
-    const remain = Math.sqrt((liveShotPending.xh-hole.greenCx)**2 + (liveShotPending.yh-hole.yardage)**2);
+    const remain = Math.sqrt((liveShotPending.xh-hole.greenCx)**2 + (liveShotPending.yh-hole.greenYh)**2);
     const lc = liveLieColor(c.lieId);
     const chipRecs = recs.length ? recs : (bag.length ? [{club:bag[0]}] : []);
     return `<div class="confirm-box">
@@ -3262,7 +3474,7 @@ function renderLiveHoleView(h, stats){
 
   return header + `
     <div class="diagram-card" id="diagramCard" style="width:${cardWidthPx.toFixed(1)}px;height:${diagramHeightPx.toFixed(1)}px;">
-      ${renderHoleShapeSvg(hole,{id:'liveHoleSvg', viewBox, zoom, shots:h.shots, pending:liveShotPending})}
+      ${renderHoleShapeSvg(hole,{id:'liveHoleSvg', viewBox, zoom, stretch, pxH:diagramHeightPx, shots:h.shots, pending:liveShotPending})}
       <button class="view-fab" id="viewToggleBtn">${liveView==='whole' ? '⤢ Green' : '⤡ Whole'}</button>
       <div class="drag-ring" id="liveDragRing"></div>
       <div class="drag-tooltip" id="liveDragTooltip"><div class="dt-main"><span id="liveDtDist">0y</span><span class="dt-lie" id="liveDtLie">Fairway</span></div><div class="dt-sub" id="liveDtRemain">0y to pin</div></div>
@@ -4154,7 +4366,7 @@ function attachHandlers(){
         const xFrac = (clientX-rect.left)/rect.width, yFrac = (clientY-rect.top)/rect.height;
         const xSvg = vb.x + xFrac*vb.width, ySvg = vb.y + yFrac*vb.height;
         const yhRaw = hole.totalH - HOLE_MARGIN_TEE - ySvg;
-        return { xh: xSvg, yh: Math.max(-HOLE_MARGIN_TEE+2, Math.min(hole.yardage+HOLE_MARGIN_GREEN-3, yhRaw)) };
+        return { xh: xSvg, yh: Math.max(-HOLE_MARGIN_TEE+2, Math.min(hole.greenYh+HOLE_MARGIN_GREEN-3, yhRaw)) };
       };
       const markerEl = () => document.getElementById('liveHoleSvg-pendingMarker');
       const ringEl = document.getElementById('liveDragRing');
@@ -4164,14 +4376,16 @@ function attachHandlers(){
 
       function paintLive(pos, clientX, clientY){
         const m = markerEl();
-        if(m){ m.setAttribute('cx', pos.xh.toFixed(2)); m.setAttribute('cy', hole.svgY(pos.yh).toFixed(2)); m.setAttribute('opacity','1'); }
+        // The marker is a <g> (dot + its drop shadow), so it moves by transform
+        // — setting cx/cy here would silently do nothing on a group.
+        if(m){ m.setAttribute('transform', `translate(${pos.xh.toFixed(2)},${hole.svgY(pos.yh).toFixed(2)})`); m.setAttribute('opacity','1'); }
         const cardRect = diagramCardEl.getBoundingClientRect();
         const localX = clientX-cardRect.left, localY = clientY-cardRect.top;
         ringEl.style.left = localX+'px'; ringEl.style.top = localY+'px'; ringEl.classList.add('on');
 
         const origin = currentLiveOrigin(h);
         const distSoFar = Math.sqrt((pos.xh-origin.xh)**2+(pos.yh-origin.yh)**2);
-        const remain = Math.sqrt((pos.xh-hole.greenCx)**2+(pos.yh-hole.yardage)**2);
+        const remain = Math.sqrt((pos.xh-hole.greenCx)**2+(pos.yh-hole.greenYh)**2);
         const c = classifyHoleShot(hole, pos.xh, pos.yh);
         dtDist.textContent = Math.round(distSoFar)+'y';
         dtLie.textContent = liveLieLabel(c.lieId);
@@ -4257,11 +4471,11 @@ function attachHandlers(){
       const distJustHit = Math.sqrt((liveShotPending.xh-origin.xh)**2 + (liveShotPending.yh-origin.yh)**2);
       const overrideEl = document.getElementById('remainOverride');
       const remain = (overrideEl && overrideEl.value!=='') ? Number(overrideEl.value)
-        : Math.sqrt((liveShotPending.xh-hole.greenCx)**2 + (liveShotPending.yh-hole.yardage)**2);
+        : Math.sqrt((liveShotPending.xh-hole.greenCx)**2 + (liveShotPending.yh-hole.greenYh)**2);
       const c = classifyHoleShot(hole, liveShotPending.xh, liveShotPending.yh);
       const clubId = liveShotClub || (bag[0] && bag[0].id) || null;
       const originLieId = h.shots.length ? classifyHoleShot(hole, origin.xh, origin.yh).lieId : 'tee';
-      const targetAtOrigin = Math.round(Math.sqrt((origin.xh-hole.greenCx)**2 + (origin.yh-hole.yardage)**2));
+      const targetAtOrigin = Math.round(Math.sqrt((origin.xh-hole.greenCx)**2 + (origin.yh-hole.greenYh)**2));
 
       h.shots.push({ xh: liveShotPending.xh, yh: liveShotPending.yh, club: clubId, lie: c.lieId, distYards: distJustHit, remainYards: remain });
 
