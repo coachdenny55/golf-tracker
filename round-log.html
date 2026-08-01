@@ -1139,8 +1139,18 @@ function classifyHoleShot(hole, xh, yh){
   const onGreen = distToGreen <= GREEN_RADIUS_YARDS;
   const near = nearestHoleLie(hole, xh, yh);
   const lieId = onGreen ? 'green' : ({Fairway:'fairway','First cut':'lightrough',Rough:'heavyrough'}[near.lie] || 'heavyrough');
+  // Two different notions of "how bad", because a tee shot and an approach are
+  // judged against different things:
+  //   severity     - distance from the GREEN, for approach/GIR misses
+  //   widthSeverity - how far off the CORRIDOR, for tee/FIR misses
+  // (matching the old classifyGreenTap / classifyFairwayTap semantics). Both
+  // must be returned: severity used to be computed here and then dropped off
+  // the return, which left firMissSeverity/girMissSeverity undefined on every
+  // shot-by-shot hole — silently disabling the ledger's bad-miss highlighting,
+  // the spray-chart dot colours, inferApproachLie, and the tee-miss focus item.
   const severity = distToGreen<=GREEN_NEAR_MISS_YARDS ? 'near' : 'bad';
-  return { lieId, onGreen, distToGreen, lateral:near.lateral };
+  const widthSeverity = lieId==='heavyrough' ? 'bad' : 'near';
+  return { lieId, onGreen, distToGreen, lateral:near.lateral, severity, widthSeverity };
 }
 // Yardage-to-the-green markers, drawn as a short tick across the fairway with
 // the number beside it rather than a full sweeping arc — the arcs read as
@@ -1308,9 +1318,12 @@ function deriveHoleSummaryFields(h){
     h.teeClub = t.club;
     h.fir = c.onGreen || c.lieId==='fairway' ? 'hit' : 'miss';
     if(h.fir==='miss'){
-      h.firMissDir = t.xh >= 0 ? 'right' : 'left'; // fairway miss has no "center" — matches the original classifyFairwayTap
-      h.firMissSeverity = c.severity;
+      h.firMissDir = c.lateral >= 0 ? 'right' : 'left'; // fairway miss has no "center" — matches the original classifyFairwayTap
+      h.firMissSeverity = c.widthSeverity;              // judged off the corridor, not off the green
     } else { h.firMissDir=null; h.firMissSeverity=null; }
+    // Feeds the tee-shot spray chart, which plots lateral dispersion against
+    // how far the drive went relative to the rest of the round's drives.
+    h.firTap = { lateral: c.lateral, long: 0, distYards: t.distYards };
   }
 
   // The approach is whichever shot first reaches the green, or the most
@@ -2158,6 +2171,8 @@ let liveShotPending = null;      // {xh,yh}|null — an uncommitted tap, waiting
 let liveShotClub = null;         // club id currently selected in the confirm box, overriding the top recommendation
 let liveView = 'whole';          // 'whole' | 'green' — which window the diagram shows
 let liveViewHoleIdx = null;      // which hole liveView/pending state belongs to, so switching holes resets it
+let liveConditionsOpen = false;  // is the inline wind/temp/altitude panel expanded on the live tracking screen
+let liveShapePickerOpen = false; // is the inline "change hole shape" panel expanded
 
 const app = document.getElementById('app');
 
@@ -2346,12 +2361,43 @@ function careerStats(hist){
   };
 }
 
+// A hole counts as "played" once it holds real score/putts data — either GIR
+// got derived (freeform tap or shot-by-shot) or the hole was logged in Quick
+// Entry (score+putts only, which deliberately never sets gir). Anything else
+// is still sitting on blankHole()'s placeholder score (=par) and putts (=2)
+// and must not be counted into totals or "holes so far" progress — those
+// placeholders used to get summed in unconditionally, so a round saved (or
+// just viewed) before all 18 holes were played showed inflated putts/score.
+function holePlayed(h){ return h.gir!==null || h.quickMode; }
+
+// Ledger score/putts cells. Those two fields carry a live default (score=par,
+// putts=2) the instant a hole exists, so rendering them raw for a hole nobody
+// has reached yet reads as "you already made par here" — the same root cause
+// as holePlayed() above, just on the display side instead of the stats side.
+// The hole actively being played always shows its live (possibly
+// still-default) value, same as its own score-stepper widget; every other
+// not-yet-played hole shows a placeholder instead. Reuses holePlayed() rather
+// than a separate "committed" flag: it's already false until something real
+// exists for that hole, which is exactly the distinction needed here too.
+function ledgerScoreCell(hh, i){
+  if(i!==currentHole && !holePlayed(hh)) return `<td style="color:var(--ink-soft);">–</td>`;
+  const diff = hh.score-hh.par;
+  const scoreCls = diff>0?'score-over':(diff<0?'score-under':'');
+  return `<td class="${scoreCls}">${hh.score}</td>`;
+}
+function ledgerPuttsCell(hh, i){
+  if(i!==currentHole && !holePlayed(hh)) return `<td style="color:var(--ink-soft);">–</td>`;
+  return `<td>${hh.putts}</td>`;
+}
+
 // ---------- Stat computation ----------
 function computeStats(r){
   let totalScore=0, totalPar=0, girHit=0, girAttempts=0, firHit=0, firAttempts=0;
-  let putts=0, udHit=0, udAttempts=0;
+  let putts=0, udHit=0, udAttempts=0, holesPlayed=0;
   let scoreOnGirHit=[], scoreOnGirMiss=[];
   r.holes.forEach(h=>{
+    if(!holePlayed(h)) return;
+    holesPlayed++;
     totalScore += Number(h.score)||0;
     totalPar += Number(h.par)||0;
     if(h.gir!==null){
@@ -2367,7 +2413,7 @@ function computeStats(r){
     totalScore, totalPar, toPar: totalScore-totalPar,
     girHit, girAttempts, girPct: girAttempts? Math.round(girHit/girAttempts*100):0,
     firHit, firAttempts, firPct: firAttempts? Math.round(firHit/firAttempts*100):0,
-    putts, puttsAvg: (putts/18),
+    putts, holesPlayed, puttsAvg: (holesPlayed? putts/holesPlayed : 0),
     udHit, udAttempts, udPct: udAttempts? Math.round(udHit/udAttempts*100):0,
     avgOnGirHit: avg(scoreOnGirHit), avgOnGirMiss: avg(scoreOnGirMiss)
   };
@@ -2404,7 +2450,12 @@ function scoreCaption(score,par){
 
 // ---------- Insights ----------
 function buildInsights(r, stats, hist){
-  const holesEntered = r.holes.filter(h=>h.gir!==null).length;
+  // Was r.holes.filter(h=>h.gir!==null).length — missed every hole played in
+  // Quick Entry, which records score+putts but never gir by design. That both
+  // hid insights on a quick-mode-heavy round (gate below) and, further down,
+  // undercounted the putts pace denominator. stats.holesPlayed (computeStats)
+  // uses the same holePlayed() check but counts quickMode holes correctly.
+  const holesEntered = stats.holesPlayed;
   if(holesEntered < 3){
     return null;
   }
@@ -2420,13 +2471,18 @@ function buildInsights(r, stats, hist){
     }
   }
 
-  // Putts benchmark
-  if(stats.putts>0){
-    const projected = Math.round(stats.puttsAvg*18);
+  // Putts benchmark. stats.puttsAvg is already putts-per-hole-played (see
+  // computeStats/holePlayed) rather than a hardcoded /18, so mid-round this no
+  // longer reads as "averaging 1.0 putts/hole, projecting to 18 for 18" after
+  // nine holes.
+  if(stats.putts>0 && holesEntered>0){
+    const perHole = stats.puttsAvg;
+    const projected = Math.round(perHole*18);
+    const sofar = holesEntered<18 ? `<b>${stats.putts}</b> through ${holesEntered} holes — ` : '';
     if(projected>32){
-      insights.push(`You're averaging <b>${stats.puttsAvg.toFixed(1)} putts/hole</b>, projecting to about <b>${projected} for 18</b>. Breaking 80 usually means getting closer to <b>31-32 total putts</b>.`);
+      insights.push(`${sofar}you're averaging <b>${perHole.toFixed(1)} putts/hole</b>, on pace for about <b>${projected} for 18</b>. Breaking 80 usually means getting closer to <b>31-32 total putts</b>.`);
     } else {
-      insights.push(`Your putting pace (<b>~${projected} for 18</b>) is already inside the range that supports low-80s/70s scoring.`);
+      insights.push(`${sofar}your putting pace (<b>~${projected} for 18</b>) is already inside the range that supports low-80s/70s scoring.`);
     }
   }
 
@@ -2545,6 +2601,7 @@ function renderHamMenu(){
       <div class="ham-panel">
         <div class="ham-hdr"><div class="ht">Round Log</div></div>
         <div class="ham-item" id="hamSettings">Settings</div>
+        ${roundInProgress ? `<div class="ham-item" id="hamDiscardRound" style="color:var(--red);">Discard This Round</div>` : ``}
         <div class="ham-version">v${APP_VERSION}</div>
       </div>
     </div>
@@ -3315,9 +3372,103 @@ function renderHoleSetupView(h, stats){
   `;
 }
 
+// Clears every field deriveHoleSummaryFields() sets, for when a hole's
+// shots[] log has gone back to empty (a full "Reset shots"/"Edit hole setup",
+// or Undo popping the very last shot on a hole). Previously duplicated at
+// each call site and missing firTap/recClub/recSwing/followedRec, which let a
+// stale firTap survive a reset and leak a phantom "hit" dot for that hole
+// into the tee-shot spray chart (renderFairwaySprayChartSection gates on
+// firTap alone, not on fir).
+function resetHoleShotFields(h){
+  h.fir=null; h.firMissDir=null; h.firMissSeverity=null; h.firTap=null; h.teeClub=null;
+  h.gir=null; h.girMissDist=null; h.girMissDir=null; h.girMissSeverity=null; h.girTap=null;
+  h.club=null; h.approachLie=null; h.approachYards=null; h.approach=null; h.ud=null; h.puttDist=null;
+  h.recClub=null; h.recSwing=null; h.followedRec=null;
+}
+// Walks backward from currentHole looking for the closest hole that still has
+// a shot logged — that's what "Undo last shot" removes next. Deliberately
+// keyed on shots.length alone, not `!hh.quickMode`: toggling Quick Entry on a
+// hole hides the shot UI but doesn't clear shots[], so a hole with real shots
+// still needs to be reachable even while displayed in quick-entry mode.
+function findUndoHoleIndex(){
+  for(let i=currentHole;i>=0;i--){
+    const hh = round.holes[i];
+    if(hh.shots && hh.shots.length) return i;
+  }
+  return -1;
+}
+// Pops the single most recent shot off the round — which may be on an
+// earlier hole than the one currently in view, if this hole hasn't had a
+// shot logged yet. One tap == one shot removed, so calling this three times
+// in a row removes the last three shots, hole boundaries included.
+async function undoLastShot(){
+  const idx = findUndoHoleIndex();
+  if(idx<0) return;
+  const hh = round.holes[idx];
+  const removed = hh.shots.pop();
+  if(removed && removed.clubShotUid){
+    const club = bag.find(c=>c.id===removed.club);
+    if(club && club.shots){
+      const i = club.shots.findIndex(s=>s.uid===removed.clubShotUid);
+      if(i>-1){ club.shots.splice(i,1); await saveBag(); }
+    }
+  }
+  if(hh.shots.length){
+    deriveHoleSummaryFields(hh);
+  } else {
+    resetHoleShotFields(hh);
+  }
+  currentHole = idx;
+  liveShotPending = null; liveShotClub = null;
+  roundInProgress = true;
+  render();
+}
+function renderLiveShapePicker(h){
+  return `
+    <div class="field" style="margin:2px 0 8px;">
+      <span class="field-label">Change Hole Shape</span>
+      <div class="btn-row" style="flex-wrap:wrap;">
+        ${HOLE_SHAPE_ORDER.map(id=>`<button data-changeshape="${id}" class="${h.shape===id?'sel':''}" style="flex:0 0 auto;padding:7px 9px;font-size:11.5px;">${HOLE_SHAPES[id].label}</button>`).join('')}
+      </div>
+      <div class="na-note">Only redraws the fairway/rough shape — shots you've already logged are re-checked against it, not lost.</div>
+    </div>
+  `;
+}
+// Wind/temp/altitude for the round. Shares `shot` with the Caddie tab (see
+// wireConditionsControls) so setting it here also sharpens the live club
+// recommendation, and — once a shot is logged — lets on-course shots strip
+// conditions back out for the learned-yardage model the same way the
+// practice log already does, instead of treating the raw distance as neutral.
+function renderLiveConditionsPanel(){
+  return `
+    <div class="field" style="margin:2px 0 8px;">
+      <span class="field-label">Today's Conditions</span>
+      <div class="btn-row" id="liveWindDirRow">
+        ${[['none','Calm'],['head','Into'],['tail','Down'],['cross','Cross']].map(([v,l])=>
+          `<button data-winddir="${v}" class="${shot.windDir===v?(v==='head'?'sel bad':'sel'):''}">${l}</button>`).join('')}
+      </div>
+      ${shot.windDir!=='none' ? `
+      <div class="btn-row" id="liveWindMphRow" style="margin-top:6px;">
+        ${[5,10,15,20,25].map(v=>`<button data-windmph="${v}" class="${shot.windMph===v?'sel':''}">${v}</button>`).join('')}
+      </div>` : ''}
+      <div class="compact-grid" style="margin-top:8px;">
+        <div>
+          <input class="mini-input" id="tempInput" type="number" inputmode="numeric" value="${shot.tempF}">
+          <div class="na-note" style="text-align:center;padding:4px 0;">Temp °F</div>
+        </div>
+        <div>
+          <input class="mini-input" id="altInput" type="number" inputmode="numeric" value="${shot.alt}">
+          <div class="na-note" style="text-align:center;padding:4px 0;">Altitude ft</div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
 function renderLiveHoleView(h, stats){
   deriveHoleSummaryFields(h);
   const hole = buildHoleLayout(h.shape, h.refYardage, h.par===3);
+  const undoHoleIdx = findUndoHoleIndex();
 
   const header = `
     <div class="live-hdr">
@@ -3326,10 +3477,15 @@ function renderLiveHoleView(h, stats){
       <button class="lh-arrow" id="nextHole" ${currentHole===17?'disabled':''}>&#8594;</button>
     </div>
     <div style="display:flex;justify-content:center;gap:14px;margin:-2px 0 4px;flex-wrap:wrap;">
+      ${undoHoleIdx>=0 ? `<button class="quick-mode-link" style="margin:0;" id="undoShotBtn">Undo last shot${undoHoleIdx!==currentHole?` (Hole ${undoHoleIdx+1})`:''}</button>` : ``}
       ${h.shots.length ? `<button class="quick-mode-link" style="margin:0;" id="resetShotsBtn">Reset shots</button>` : ``}
       <button class="quick-mode-link" style="margin:0;" id="toggleQuickBtn">${h.quickMode ? 'Track shots for this hole' : 'Quick entry instead'}</button>
+      ${!h.quickMode && h.par!==3 ? `<button class="quick-mode-link" style="margin:0;" id="toggleShapePickerBtn">${liveShapePickerOpen?'Cancel shape change':'Change shape'}</button>` : ``}
+      ${!h.quickMode ? `<button class="quick-mode-link" style="margin:0;" id="toggleConditionsBtn">${liveConditionsOpen?'Hide conditions':'Conditions'}</button>` : ``}
       <button class="quick-mode-link" style="margin:0;" id="editHoleSetupBtn">Edit hole setup</button>
     </div>
+    ${!h.quickMode && liveShapePickerOpen ? renderLiveShapePicker(h) : ``}
+    ${!h.quickMode && liveConditionsOpen ? renderLiveConditionsPanel() : ``}
   `;
 
   if(h.quickMode){
@@ -3357,14 +3513,12 @@ function renderLiveHoleView(h, stats){
           <thead><tr><th>H</th><th>Par</th><th>Score</th><th>FIR</th><th>GIR</th><th>Putts</th></tr></thead>
           <tbody>
             ${round.holes.map((hh,i)=>{
-              const diff = hh.score-hh.par;
-              const scoreCls = diff>0?'score-over':(diff<0?'score-under':'');
               return `<tr class="${i===currentHole?'current-row':''}" data-jump="${i}">
                 <td>${i+1}</td><td>${hh.par}</td>
-                <td class="${scoreCls}">${hh.score}</td>
+                ${ledgerScoreCell(hh,i)}
                 <td>${hh.par===3?'—':(hh.fir==='hit'?'✓':hh.fir==='miss'?`<span title="${hh.firMissDir?('Missed '+hh.firMissDir):'Missed fairway'}" style="${hh.firMissSeverity==='bad'?'color:var(--red);font-weight:600;':''}">${hh.firMissDir==='left'?'L':hh.firMissDir==='right'?'R':'✕'}</span>`:'')}</td>
                 <td>${hh.gir==='hit'?'✓':hh.gir==='miss'?`<span title="${escapeHtml(girMissLabel(hh))}" style="${hh.girMissSeverity==='bad'?'color:var(--red);font-weight:600;':''}">${girMissAbbrev(hh)}</span>`:''}</td>
-                <td>${hh.putts}</td>
+                ${ledgerPuttsCell(hh,i)}
               </tr>`;
             }).join('')}
           </tbody>
@@ -3385,6 +3539,12 @@ function renderLiveHoleView(h, stats){
 
   shot.target = Math.max(1, Math.round(remainFromOrigin));
   shot.lie = onGreenNow ? 'fairway' : (originLie.lieId==='green' ? 'fairway' : originLie.lieId);
+  // Course rounds have no per-shot elevation-to-target or lie-slope input, so
+  // force these neutral each render rather than leaving them at whatever the
+  // Caddie tab last set on the shared `shot` object — otherwise a slope/elev
+  // picked for an unrelated Caddie lookup would silently bias both the live
+  // recommendation and the neutral-yardage strip on the next logged shot.
+  shot.slope = 'flat'; shot.elev = 0;
   const recs = (!onGreenNow && bag.length) ? recommendClubs(shot) : [];
   if(liveShotPending && !liveShotClub && recs[0]) liveShotClub = recs[0].club.id;
 
@@ -3540,14 +3700,12 @@ function renderLiveHoleView(h, stats){
         <thead><tr><th>H</th><th>Par</th><th>Score</th><th>FIR</th><th>GIR</th><th>Putts</th></tr></thead>
         <tbody>
           ${round.holes.map((hh,i)=>{
-            const diff = hh.score-hh.par;
-            const scoreCls = diff>0?'score-over':(diff<0?'score-under':'');
             return `<tr class="${i===currentHole?'current-row':''}" data-jump="${i}">
               <td>${i+1}</td><td>${hh.par}</td>
-              <td class="${scoreCls}">${hh.score}</td>
+              ${ledgerScoreCell(hh,i)}
               <td>${hh.par===3?'—':(hh.fir==='hit'?'✓':hh.fir==='miss'?`<span title="${hh.firMissDir?('Missed '+hh.firMissDir):'Missed fairway'}" style="${hh.firMissSeverity==='bad'?'color:var(--red);font-weight:600;':''}">${hh.firMissDir==='left'?'L':hh.firMissDir==='right'?'R':'✕'}</span>`:'')}</td>
               <td>${hh.gir==='hit'?'✓':hh.gir==='miss'?`<span title="${escapeHtml(girMissLabel(hh))}" style="${hh.girMissSeverity==='bad'?'color:var(--red);font-weight:600;':''}">${girMissAbbrev(hh)}</span>`:''}</td>
-              <td>${hh.putts}</td>
+              ${ledgerPuttsCell(hh,i)}
             </tr>`;
           }).join('')}
         </tbody>
@@ -3567,6 +3725,7 @@ function renderRoundView(stats){
   const h = round.holes[currentHole];
   if(liveViewHoleIdx !== currentHole){
     liveShotPending = null; liveShotClub = null; liveView = 'whole'; liveViewHoleIdx = currentHole;
+    liveConditionsOpen = false; liveShapePickerOpen = false;
   }
   // Arriving at a hole nobody's set up yet (freeform rounds, or a course
   // hole with no saved shape) — pick par/yardage/shape once, then go. A
@@ -3582,7 +3741,7 @@ function renderRoundView(stats){
     h.teeClub = defaultTeeClubForHole(currentHole);
   }
   const dots = round.holes.map((hh,i)=>{
-    const cls = i===currentHole ? 'current' : (hh.gir!==null ? 'done' : '');
+    const cls = i===currentHole ? 'current' : (holePlayed(hh) ? 'done' : '');
     return `<span class="${cls}"></span>`;
   }).join('');
   const ss = computeStrokesSummary(stats);
@@ -3729,14 +3888,12 @@ function renderRoundView(stats){
         <thead><tr><th>H</th><th>Par</th><th>Score</th><th>FIR</th><th>GIR</th><th>Putts</th></tr></thead>
         <tbody>
           ${round.holes.map((hh,i)=>{
-            const diff = hh.score-hh.par;
-            const scoreCls = diff>0?'score-over':(diff<0?'score-under':'');
             return `<tr class="${i===currentHole?'current-row':''}" data-jump="${i}">
               <td>${i+1}</td><td>${hh.par}</td>
-              <td class="${scoreCls}">${hh.score}</td>
+              ${ledgerScoreCell(hh,i)}
               <td>${hh.par===3?'—':(hh.fir==='hit'?'✓':hh.fir==='miss'?`<span title="${hh.firMissDir?('Missed '+hh.firMissDir):'Missed fairway'}" style="${hh.firMissSeverity==='bad'?'color:var(--red);font-weight:600;':''}">${hh.firMissDir==='left'?'L':hh.firMissDir==='right'?'R':'✕'}</span>`:'')}</td>
               <td>${hh.gir==='hit'?'✓':hh.gir==='miss'?`<span title="${escapeHtml(girMissLabel(hh))}" style="${hh.girMissSeverity==='bad'?'color:var(--red);font-weight:600;':''}">${girMissAbbrev(hh)}</span>`:''}</td>
-              <td>${hh.putts}</td>
+              ${ledgerPuttsCell(hh,i)}
             </tr>`;
           }).join('')}
         </tbody>
@@ -3847,7 +4004,8 @@ function renderSprayChartSection(){
     (sprayFilterClub==='all' || h.club===sprayFilterClub) &&
     (sprayFilterApproach==='all' || h.approach===sprayFilterApproach)
   );
-  const clubsInPlay = CLUBS.filter(c => allShots.some(h=>h.club===c));
+  // From the data, not the CLUBS category list — see the tee chart below.
+  const clubsInPlay = [...new Set(allShots.map(h=>h.club).filter(Boolean))].sort();
   const approachesInPlay = APPROACH_RANGES.filter(a => allShots.some(h=>h.approach===a));
   const missesOnly = filtered.filter(h=>h.gir==='miss');
   const badCount = missesOnly.filter(h=>h.girMissSeverity==='bad').length;
@@ -3886,9 +4044,25 @@ function renderFairwaySprayChartSection(){
       </div>`;
   }
   const filtered = allShots.filter(h => sprayFairwayFilterClub==='all' || h.teeClub===sprayFairwayFilterClub);
-  const clubsInPlay = CLUBS.filter(c => allShots.some(h=>h.teeClub===c));
+  // Built from the values actually recorded, not from the CLUBS category list:
+  // shot-by-shot rounds store the bag's own club id ("3 Hybrid"), which never
+  // matches a CLUBS category ("Hybrid"), so filtering off CLUBS silently
+  // dropped every club from the dropdown for those rounds.
+  const clubsInPlay = [...new Set(allShots.map(h=>h.teeClub).filter(Boolean))].sort();
   const missesOnly = filtered.filter(h=>h.fir==='miss');
   const badCount = missesOnly.filter(h=>h.firMissSeverity==='bad').length;
+  // The vertical axis is distance against your own norm with that club, so the
+  // chart reads as push/pull vs long/short rather than a flat line. Legacy
+  // tap-logged rounds keep the `long` they stored.
+  const dists = filtered.map(h=>h.firTap && h.firTap.distYards).filter(d=>typeof d==='number').sort((a,b)=>a-b);
+  const medianDist = dists.length ? dists[Math.floor(dists.length/2)] : null;
+  const teeDot = h => {
+    const t = h.firTap || {};
+    const long = (typeof t.distYards==='number' && medianDist!=null)
+      ? Math.max(-44, Math.min(44, t.distYards - medianDist))
+      : (t.long||0);
+    return { lateral: t.lateral||0, long, severity: h.fir==='hit' ? null : h.firMissSeverity };
+  };
   return `
     <div class="sparkline-block">
       <h4>Tee Shot Spray Chart</h4>
@@ -3897,7 +4071,7 @@ function renderFairwaySprayChartSection(){
         ${clubsInPlay.map(c=>`<option value="${c}" ${sprayFairwayFilterClub===c?'selected':''}>${c}</option>`).join('')}
       </select>
       ${filtered.length
-        ? renderFairwayDiagram('fairwaySprayChartDiagram', {dots: filtered.map(h=>({...h.firTap, severity: h.fir==='hit' ? null : h.firMissSeverity}))})
+        ? renderFairwayDiagram('fairwaySprayChartDiagram', {dots: filtered.map(teeDot)})
         : `<div class="na-note">No tee shots logged for that filter yet.</div>`}
       <div class="na-note" style="text-align:center;">${filtered.length} tee shot${filtered.length===1?'':'s'} plotted, ${missesOnly.length} missed the fairway · <span style="color:var(--green-deep);">●</span> hit · <span style="color:var(--gold);">●</span> near miss · <span style="color:var(--red);">●</span> bad miss (${badCount} of ${missesOnly.length||1})</div>
     </div>
@@ -3927,6 +4101,23 @@ function wireSprayChartHandlers(){
 }
 function escapeHtml(s){
   return (s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+// Wind/temp/altitude controls on the shared `shot` scratch object — used by
+// both the standalone Caddie tab and the live round tracker's Conditions
+// panel, so this is wired from both places rather than duplicated.
+function wireConditionsControls(){
+  document.querySelectorAll('[data-winddir]').forEach(b=>b.onclick=()=>{
+    shot.windDir=b.dataset.winddir;
+    if(shot.windDir==='none') shot.windMph=0;
+    else if(shot.windMph===0) shot.windMph=10;
+    render();
+  });
+  document.querySelectorAll('[data-windmph]').forEach(b=>b.onclick=()=>{ shot.windMph=Number(b.dataset.windmph); render(); });
+  const tempI = document.getElementById('tempInput');
+  if(tempI) tempI.onchange = async e => { shot.tempF = Number(e.target.value)||70; await saveSettings(); render(); };
+  const altI = document.getElementById('altInput');
+  if(altI) altI.onchange = async e => { shot.alt = Number(e.target.value)||0; await saveSettings(); render(); };
 }
 
 // ---------- Event handling ----------
@@ -3962,6 +4153,20 @@ function attachHandlers(){
   if(hamDim) hamDim.onclick = ()=>{ hamOpen = false; render(); };
   const hamSettings = document.getElementById('hamSettings');
   if(hamSettings) hamSettings.onclick = ()=>{ hamOpen = false; activeTab = 'settings'; render(); };
+  const hamDiscardRound = document.getElementById('hamDiscardRound');
+  if(hamDiscardRound) hamDiscardRound.onclick = async ()=>{
+    if(!confirm('Discard this round? Every hole entered so far will be deleted — this can\'t be undone.')) return;
+    hamOpen = false;
+    round = newRound();
+    currentHole = 0;
+    roundInProgress = false;
+    roundStartStep = null;
+    caddieOpenHole = null;
+    liveShotPending = null; liveShotClub = null; liveConditionsOpen = false; liveShapePickerOpen = false;
+    await clearInProgressRound();
+    activeTab = 'home';
+    render();
+  };
   const checkUpdateBtn = document.getElementById('checkUpdateBtn');
   if(checkUpdateBtn) checkUpdateBtn.onclick = checkForAppUpdate;
 
@@ -4036,21 +4241,10 @@ function attachHandlers(){
     });
     document.querySelectorAll('[data-lie]').forEach(b=>b.onclick=()=>{ shot.lie=b.dataset.lie; render(); });
     document.querySelectorAll('[data-slope]').forEach(b=>b.onclick=()=>{ shot.slope=b.dataset.slope; render(); });
-    document.querySelectorAll('[data-winddir]').forEach(b=>b.onclick=()=>{
-      shot.windDir=b.dataset.winddir;
-      if(shot.windDir==='none') shot.windMph=0;
-      else if(shot.windMph===0) shot.windMph=10;
-      render();
-    });
-    document.querySelectorAll('[data-windmph]').forEach(b=>b.onclick=()=>{ shot.windMph=Number(b.dataset.windmph); render(); });
+    wireConditionsControls();
     document.querySelectorAll('[data-elev]').forEach(b=>b.onclick=()=>{ shot.elev=Number(b.dataset.elev); render(); });
     document.querySelectorAll('[data-trouble]').forEach(b=>b.onclick=()=>{ shot.trouble=b.dataset.trouble; if(shot.trouble!=='short') shot.mustCarry=false; render(); });
     document.querySelectorAll('[data-mustcarry]').forEach(b=>b.onclick=()=>{ shot.mustCarry=!shot.mustCarry; render(); });
-
-    const tempI = document.getElementById('tempInput');
-    if(tempI) tempI.onchange = async e => { shot.tempF = Number(e.target.value)||70; await saveSettings(); render(); };
-    const altI = document.getElementById('altInput');
-    if(altI) altI.onchange = async e => { shot.alt = Number(e.target.value)||0; await saveSettings(); render(); };
 
     document.querySelectorAll('[data-logswing]').forEach(b=>b.onclick=()=>{ window._logSwing=b.dataset.logswing; render(); });
     document.querySelectorAll('[data-logstrike]').forEach(b=>b.onclick=()=>{ window._logStrike=b.dataset.logstrike; render(); });
@@ -4296,15 +4490,35 @@ function attachHandlers(){
   if(resetShotsBtn) resetShotsBtn.onclick = ()=>{
     if(!confirm('Clear all logged shots for this hole?')) return;
     h.shots = [];
-    h.fir=null; h.firMissDir=null; h.firMissSeverity=null; h.teeClub=null;
-    h.gir=null; h.girMissDist=null; h.girMissDir=null; h.girMissSeverity=null; h.girTap=null;
-    h.club=null; h.approachLie=null; h.approachYards=null; h.approach=null; h.ud=null; h.puttDist=null;
+    resetHoleShotFields(h);
     liveShotPending=null; liveShotClub=null;
     roundInProgress=true;
     render();
   };
   const toggleQuickBtn = document.getElementById('toggleQuickBtn');
   if(toggleQuickBtn) toggleQuickBtn.onclick = ()=>{ h.quickMode = !h.quickMode; roundInProgress=true; render(); };
+  const toggleShapePickerBtn = document.getElementById('toggleShapePickerBtn');
+  if(toggleShapePickerBtn) toggleShapePickerBtn.onclick = ()=>{ liveShapePickerOpen = !liveShapePickerOpen; liveConditionsOpen=false; render(); };
+  document.querySelectorAll('[data-changeshape]').forEach(b=>b.onclick=()=>{
+    h.shape = b.dataset.changeshape;
+    if(h.shots && h.shots.length){
+      // Each shot's own `.lie` is a snapshot taken at log time against the
+      // OLD shape — deriveHoleSummaryFields recomputes h.fir/h.gir fresh
+      // from xh/yh so those stay correct either way, but without this the
+      // per-shot ledger below would keep showing the pre-change lie label.
+      const newHole = buildHoleLayout(h.shape, h.refYardage, h.par===3);
+      h.shots.forEach(s=>{ s.lie = classifyHoleShot(newHole, s.xh, s.yh).lieId; });
+      deriveHoleSummaryFields(h);
+    }
+    liveShapePickerOpen = false;
+    roundInProgress = true;
+    render();
+  });
+  const toggleConditionsBtn = document.getElementById('toggleConditionsBtn');
+  if(toggleConditionsBtn) toggleConditionsBtn.onclick = ()=>{ liveConditionsOpen = !liveConditionsOpen; liveShapePickerOpen=false; render(); };
+  wireConditionsControls();
+  const undoShotBtn = document.getElementById('undoShotBtn');
+  if(undoShotBtn) undoShotBtn.onclick = undoLastShot;
   const viewToggleBtn = document.getElementById('viewToggleBtn');
   if(viewToggleBtn) viewToggleBtn.onclick = e=>{ e.stopPropagation(); liveView = liveView==='whole'?'green':'whole'; render(); };
   document.querySelectorAll('[data-liveclub]').forEach(b=>b.onclick=()=>{ liveShotClub = b.dataset.liveclub; render(); });
@@ -4313,9 +4527,7 @@ function attachHandlers(){
   if(editHoleSetupBtn) editHoleSetupBtn.onclick = ()=>{
     if(h.shots.length && !confirm('Editing hole setup clears the shots already logged for this hole. Continue?')) return;
     h.shots = []; h.setupDone = false; h.quickMode = false;
-    h.fir=null; h.firMissDir=null; h.firMissSeverity=null; h.teeClub=null;
-    h.gir=null; h.girMissDist=null; h.girMissDir=null; h.girMissSeverity=null; h.girTap=null;
-    h.club=null; h.approachLie=null; h.approachYards=null; h.approach=null; h.ud=null; h.puttDist=null;
+    resetHoleShotFields(h);
     liveShotPending=null; liveShotClub=null;
     roundInProgress=true;
     render();
@@ -4477,23 +4689,55 @@ function attachHandlers(){
       const originLieId = h.shots.length ? classifyHoleShot(hole, origin.xh, origin.yh).lieId : 'tee';
       const targetAtOrigin = Math.round(Math.sqrt((origin.xh-hole.greenCx)**2 + (origin.yh-hole.greenYh)**2));
 
-      h.shots.push({ xh: liveShotPending.xh, yh: liveShotPending.yh, club: clubId, lie: c.lieId, distYards: distJustHit, remainYards: remain });
-
       // Feeds the learned-yardage model straight from the round — the whole
       // reason for this rebuild. No swing/strike prompt (keeps this to one
       // tap): a full, solid-contact swing is the reasonable assumption for
       // an on-course shot, same as the practice log's own defaults.
+      // `neutral` used to just be the raw distance, unlike the practice log
+      // (which runs conditionMultiplier to strip wind/temp/altitude/lie back
+      // out before folding a shot into the learned yardage). shot.lie is
+      // already this shot's real origin lie (set above in renderLiveHoleView)
+      // and shot.windDir/windMph/tempF/alt now come from the live Conditions
+      // panel, so the same strip applies here — a downwind drive from the
+      // rough no longer gets banked as this club's neutral full-swing number.
+      let clubShotUid = null;
       if(clubId){
         const club = bag.find(x=>x.id===clubId);
         if(club){
           club.shots = club.shots || [];
+          const m = conditionMultiplier(shot, 'full');
+          const neutral = distJustHit * m;
+          clubShotUid = 'cs-'+Date.now().toString(36)+Math.random().toString(36).slice(2,7);
           club.shots.push({
+            uid: clubShotUid,
             date: new Date().toISOString().slice(0,10), swing:'full', strike:'solid',
             lie: originLieId==='green' ? 'fairway' : originLieId,
-            target: targetAtOrigin, actual: Math.round(distJustHit), neutral: Math.round(distJustHit)
+            target: targetAtOrigin, actual: Math.round(distJustHit), neutral: Math.round(neutral)
           });
           if(club.shots.length>40) club.shots = club.shots.slice(-40);
           await saveBag();
+        }
+      }
+
+      // clubShotUid links back to the bag entry above so "Undo last shot" can
+      // remove the matching learned-yardage sample instead of leaving a
+      // stale one behind (see undoLastShot()).
+      h.shots.push({ xh: liveShotPending.xh, yh: liveShotPending.yh, club: clubId, lie: c.lieId, distYards: distJustHit, remainYards: remain, clubShotUid });
+
+      // Record what the caddie suggested for this shot and whether it was
+      // taken — the legacy flow captured this and the shot-by-shot flow didn't,
+      // so followedRec was never populated on a tracked round. Recomputed here
+      // rather than read from the render (its `recs` is a local of
+      // renderLiveHoleView): `shot` still holds the target/lie for the position
+      // this shot was played FROM, so this is the same recommendation that was
+      // on screen when the club was chosen.
+      if(originLieId!=='green' && bag.length){
+        const shotRecs = recommendClubs(shot);
+        if(shotRecs[0]){
+          h.recClub = shotRecs[0].club.name;
+          h.recSwing = shotRecs[0].swing.label;
+          const chosen = bag.find(x=>x.id===clubId);
+          h.followedRec = !!chosen && chosen.name === shotRecs[0].club.name;
         }
       }
 
